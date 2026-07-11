@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"github.com/peterbourgon/ff/v4"
+
 	"github.com/StevenACoffman/skillsaw/cmd"
 	"github.com/StevenACoffman/skillsaw/cmd/root"
 )
@@ -20,7 +21,8 @@ const (
 )
 
 func main() {
-	ctx, stop := signal.NotifyContext(context.Background(),
+	ctx, stop := signal.NotifyContext(
+		context.Background(),
 		os.Interrupt,    // interrupt = SIGINT = Ctrl+C
 		syscall.SIGQUIT, // Ctrl-\
 		syscall.SIGTERM, // "the normal way to politely ask a program to terminate"

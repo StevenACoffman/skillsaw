@@ -16,9 +16,15 @@ import (
 	"github.com/peterbourgon/ff/v4"
 	"github.com/peterbourgon/ff/v4/ffhelp"
 
+	"github.com/StevenACoffman/skillsaw/cmd/diagnose"
+	"github.com/StevenACoffman/skillsaw/cmd/eval"
+	"github.com/StevenACoffman/skillsaw/cmd/gate"
+	"github.com/StevenACoffman/skillsaw/cmd/hash"
+	"github.com/StevenACoffman/skillsaw/cmd/history"
+	"github.com/StevenACoffman/skillsaw/cmd/judge"
 	"github.com/StevenACoffman/skillsaw/cmd/root"
+	"github.com/StevenACoffman/skillsaw/cmd/scan"
 	"github.com/StevenACoffman/skillsaw/cmd/version"
-	// climax:imports
 )
 
 // Run parses args and dispatches to the matching command.
@@ -32,6 +38,13 @@ import (
 func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	r := root.New(stdin, stdout, stderr)
 	version.New(r)
+	eval.New(r)
+	scan.New(r)
+	diagnose.New(r)
+	hash.New(r)
+	gate.New(r)
+	history.New(r)
+	judge.New(r)
 	// register new commands here
 
 	if err := r.Command.Parse(args, ff.WithEnvVarPrefix("SKILLSAW")); err != nil {
