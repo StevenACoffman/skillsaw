@@ -71,6 +71,12 @@ Cursor, Codex, and .agents layouts).`,
 }
 
 func (cfg *Config) exec(_ context.Context, args []string) error {
+	if bad := root.MisplacedFlag(args); bad != "" {
+		return fmt.Errorf(
+			"eval: %q looks like a flag after arguments; put flags before positional arguments",
+			bad,
+		)
+	}
 	dirs := args
 	if cfg.All {
 		found, err := skill.DiscoverRoots(cfg.Roots)
@@ -87,21 +93,32 @@ func (cfg *Config) exec(_ context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	evals := cfg.gather(dirs, bases)
+	if len(evals) == 0 {
+		return root.ExitError(1)
+	}
+	return cfg.output(evals)
+}
 
+// gather loads and evaluates each directory, skipping (with a note) any that
+// fail to load.
+func (cfg *Config) gather(dirs []string, bases map[int]int) []*rubric.Evaluation {
 	rcfg := rubric.DefaultConfig()
 	evals := make([]*rubric.Evaluation, 0, len(dirs))
 	for _, dir := range dirs {
-		s, loadErr := skill.Load(dir)
-		if loadErr != nil {
-			_, _ = fmt.Fprintf(cfg.Stderr, "skip %s: %v\n", dir, loadErr)
+		s, err := skill.Load(dir)
+		if err != nil {
+			_, _ = fmt.Fprintf(cfg.Stderr, "skip %s: %v\n", dir, err)
 			continue
 		}
 		evals = append(evals, rubric.EvaluateWithBases(s, rcfg, bases))
 	}
-	if len(evals) == 0 {
-		return root.ExitError(1)
-	}
+	return evals
+}
 
+// output renders evaluations as JSON (--json) or the scorecard table (+ optional
+// per-dimension breakdown with --verbose).
+func (cfg *Config) output(evals []*rubric.Evaluation) error {
 	if cfg.JSON {
 		enc := json.NewEncoder(cfg.Stdout)
 		enc.SetIndent("", "  ")
@@ -110,7 +127,6 @@ func (cfg *Config) exec(_ context.Context, args []string) error {
 		}
 		return nil
 	}
-
 	cfg.printTable(evals)
 	if cfg.Verbose {
 		for _, ev := range evals {

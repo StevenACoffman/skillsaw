@@ -26,6 +26,21 @@ type Config struct {
 
 func (e ExitError) Error() string { return fmt.Sprintf("exit status %d", int(e)) }
 
+// MisplacedFlag returns the first positional argument that looks like a flag
+// (starts with "-"), or "" if there is none. ff/v4 stops flag parsing at the
+// first positional, so a flag placed after arguments (e.g. "eval <dir> --json")
+// is silently swallowed as a positional; commands that take positional paths use
+// this to fail loudly. It returns the offending token so the caller builds the
+// error in its own package with a command-specific prefix.
+func MisplacedFlag(args []string) string {
+	for _, a := range args {
+		if len(a) > 1 && a[0] == '-' {
+			return a
+		}
+	}
+	return ""
+}
+
 // New returns a new root Config with the given I/O writers.
 func New(stdin io.Reader, stdout, stderr io.Writer) *Config {
 	var cfg Config

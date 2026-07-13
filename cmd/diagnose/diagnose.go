@@ -51,6 +51,12 @@ model should make.`,
 }
 
 func (cfg *Config) exec(_ context.Context, args []string) error {
+	if bad := root.MisplacedFlag(args); bad != "" {
+		return fmt.Errorf(
+			"diagnose: %q looks like a flag after arguments; put flags before positional arguments",
+			bad,
+		)
+	}
 	if len(args) == 0 {
 		return errors.New("diagnose: pass at least one SKILL_DIR")
 	}

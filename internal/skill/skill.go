@@ -13,6 +13,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/goccy/go-yaml"
 )
 
 // Skill is a parsed SKILL.md and its location.
@@ -133,9 +135,16 @@ func Slug(s string) string {
 func (s *Skill) parse() {
 	text := strings.ReplaceAll(s.Raw, "\r\n", "\n")
 	s.Frontmatter, s.Body = splitFrontmatter(text)
-	fields := parseFrontmatter(s.Frontmatter)
-	s.Name = fields["name"]
-	s.Description = fields["description"]
+	var fm struct {
+		Name        string `yaml:"name"`
+		Description string `yaml:"description"`
+	}
+	// A malformed frontmatter leaves Name/Description empty; dim1 flags it.
+	if err := yaml.Unmarshal([]byte(s.Frontmatter), &fm); err != nil {
+		return
+	}
+	s.Name = strings.TrimSpace(fm.Name)
+	s.Description = strings.TrimSpace(fm.Description)
 }
 
 // splitFrontmatter separates a leading "---"-delimited YAML block from the body.
@@ -155,89 +164,4 @@ func splitFrontmatter(text string) (frontmatter, body string) {
 		body = after[nl+1:]
 	}
 	return rest[:end], body
-}
-
-// parseFrontmatter parses the YAML-ish frontmatter into a key→value map. It
-// handles single-line scalars, single/double-quoted values, and block scalars
-// (">"-folded and "|"-literal, with optional chomping indicators). It is a small
-// state machine rather than a full YAML parser: the Agent Skills frontmatter
-// surface is just a handful of top-level string fields.
-func parseFrontmatter(fm string) map[string]string {
-	m := make(map[string]string)
-	lines := strings.Split(fm, "\n")
-	i := 0
-	for i < len(lines) {
-		line := lines[i]
-		i++
-		key, rest, ok := splitKeyValue(line)
-		if !ok {
-			continue
-		}
-		if fold, isBlock := blockScalar(rest); isBlock {
-			var block []string
-			block, i = collectBlock(lines, i, indentOf(line))
-			sep := "\n"
-			if fold {
-				sep = " "
-			}
-			m[key] = strings.TrimSpace(strings.Join(block, sep))
-			continue
-		}
-		m[key] = strings.Trim(rest, `"'`)
-	}
-	return m
-}
-
-// splitKeyValue splits "  key: value" into (key, value). It reports ok=false for
-// blank lines, comments, and lines without a colon.
-func splitKeyValue(line string) (key, value string, ok bool) {
-	trimmed := strings.TrimSpace(line)
-	if trimmed == "" || strings.HasPrefix(trimmed, "#") {
-		return "", "", false
-	}
-	colon := strings.IndexByte(line, ':')
-	if colon < 0 {
-		return "", "", false
-	}
-	return strings.TrimSpace(line[:colon]), strings.TrimSpace(line[colon+1:]), true
-}
-
-// blockScalar reports whether a value is a YAML block-scalar header (">" or "|",
-// with optional "-"/"+" chomping) and whether it folds newlines into spaces.
-func blockScalar(value string) (fold, isBlock bool) {
-	switch value {
-	case ">", ">-", ">+":
-		return true, true
-	case "|", "|-", "|+":
-		return false, true
-	default:
-		return false, false
-	}
-}
-
-// collectBlock gathers the lines more-indented than keyIndent (blank lines pass
-// through), dedenting each, and returns them with the index of the first line
-// that ends the block.
-func collectBlock(lines []string, start, keyIndent int) ([]string, int) {
-	var block []string
-	i := start
-	for i < len(lines) {
-		bl := lines[i]
-		if strings.TrimSpace(bl) == "" {
-			block = append(block, "")
-			i++
-			continue
-		}
-		if indentOf(bl) <= keyIndent {
-			break
-		}
-		block = append(block, strings.TrimSpace(bl))
-		i++
-	}
-	return block, i
-}
-
-// indentOf returns the number of leading space/tab characters.
-func indentOf(line string) int {
-	return len(line) - len(strings.TrimLeft(line, " \t"))
 }

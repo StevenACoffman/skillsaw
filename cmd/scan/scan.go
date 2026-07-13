@@ -65,6 +65,12 @@ spec §9.2) are reported verbatim here; classify them downstream.`,
 }
 
 func (cfg *Config) exec(_ context.Context, args []string) error {
+	if bad := root.MisplacedFlag(args); bad != "" {
+		return fmt.Errorf(
+			"scan: %q looks like a flag after arguments; put flags before positional arguments",
+			bad,
+		)
+	}
 	dirs := args
 	if cfg.All {
 		found, err := skill.DiscoverRoots(cfg.Roots)

@@ -102,9 +102,11 @@ func TestEvaluateDimensions(t *testing.T) {
 			dimNum: 3, wantFinal: 10, wantPenalty: 0, wantFlagPart: "failure branch",
 		},
 		{
-			name: "dim4 no markers scores low", skillName: "ok-skill", desc: "d",
+			// No markers is not a deterministic defect — dim4 defers to a judge
+			// (final = floor 10) so it stops being the universal diagnosis target.
+			name: "dim4 no markers defers to judge", skillName: "ok-skill", desc: "d",
 			body:   "no visual markers here",
-			dimNum: 4, wantFinal: 2, wantFlagPart: "0 explicit",
+			dimNum: 4, wantFinal: 10, wantFlagPart: "judge if this skill type",
 		},
 		{
 			name: "dim4 three markers scores high", skillName: "ok-skill", desc: "d",
@@ -112,20 +114,49 @@ func TestEvaluateDimensions(t *testing.T) {
 			dimNum: 4, wantFinal: 9, wantFlagPart: "3 explicit",
 		},
 		{
+			// Corpus fix: a lone ⚠️ warning is too few to derive a checkpoint score
+			// and must not score worse than zero markers — it defers to judgment.
+			name: "dim4 one marker defers to judge", skillName: "ok-skill", desc: "d",
+			body:   "note: ⚠️ be careful with concurrency",
+			dimNum: 4, wantFinal: 10, wantFlagPart: "too few to derive",
+		},
+		{
 			name: "dim5 softening phrases penalised", skillName: "ok-skill", desc: "d",
 			body:   "建议这样 可以考虑那样 视情况而定",
 			dimNum: 5, wantFinal: 7, wantPenalty: 3, wantFlagPart: ">=3",
 		},
 		{
-			name: "dim6 broken resource link", skillName: "ok-skill", desc: "d",
+			name: "dim6 broken markdown link", skillName: "ok-skill", desc: "d",
 			body:   "see [ref](references/missing.md) for details",
 			dimNum: 6, wantFinal: 9, wantFlagPart: "broken link",
 		},
 		{
-			name: "dim6 reachable resource link", skillName: "ok-skill", desc: "d",
-			body:   "see references/present.md for details",
+			name: "dim6 reachable backtick link", skillName: "ok-skill", desc: "d",
+			body:   "see `references/present.md` for details",
 			files:  map[string]string{"references/present.md": "hi"},
 			dimNum: 6, wantFinal: 10, wantFlagPart: "reachable",
+		},
+		{
+			// Corpus fix: intra-skill links into non-standard dirs (methodology/,
+			// extractors/, agents/) are now checked — a broken one is caught.
+			name: "dim6 broken methodology backtick link", skillName: "ok-skill", desc: "d",
+			body:   "run `methodology/99-missing.md` next",
+			files:  map[string]string{"methodology/00-overview.md": "x"},
+			dimNum: 6, wantFinal: 9, wantFlagPart: "broken link",
+		},
+		{
+			// Placeholder/example paths (first segment is neither conventional nor
+			// an existing subdir) must NOT be treated as broken links.
+			name: "dim6 ignores placeholder path", skillName: "ok-skill", desc: "d",
+			body:   "put it at `path/to/output.md` or see https://example.com/x.md",
+			dimNum: 6, wantFinal: 10, wantFlagPart: "0 resource ref",
+		},
+		{
+			// Parent-relative links (cross-skill / example paths) are outside the
+			// skill dir and must not be flagged as broken.
+			name: "dim6 ignores parent-relative link", skillName: "ok-skill", desc: "d",
+			body:   "avoid `[...](../other/SKILL.md)` links",
+			dimNum: 6, wantFinal: 10, wantFlagPart: "0 resource ref",
 		},
 		{
 			name: "dim7 ai-slop penalised per occurrence", skillName: "ok-skill", desc: "d",
@@ -140,7 +171,96 @@ func TestEvaluateDimensions(t *testing.T) {
 		{
 			name: "dim9 concrete blacklist section", skillName: "ok-skill", desc: "d",
 			body:   blacklist,
-			dimNum: 9, wantFinal: 9, wantFlagPart: "concrete items",
+			dimNum: 9, wantFinal: 9, wantFlagPart: "3 points",
+		},
+		{
+			// Corpus fix: an English "Boundary" section (book2skill's RIA
+			// convention) with bullets under a subheading is fully credited.
+			name: "dim9 boundary with subheading bullets", skillName: "ok-skill", desc: "d",
+			body:   "## B — Boundary\n### Do Not Use When\n- do not A\n- avoid B\n- never C\n",
+			dimNum: 9, wantFinal: 9, wantFlagPart: "3 points",
+		},
+		{
+			// Corpus fix: a "Quality Red Line" section (violations that stop
+			// output) is a counter-example/blacklist section.
+			name: "dim9 quality red line section", skillName: "ok-skill", desc: "d",
+			body:   "## Quality Red Line\n- never ship without tests\n- do not skip the gate\n- avoid hand-editing\n",
+			dimNum: 9, wantFinal: 9, wantFlagPart: "points",
+		},
+		{
+			// Corpus fix: "Required Flags" must NOT match the "red flag" signal
+			// (substring bug: "requi[red flag]s"). With no real section, dim9 = 2.
+			name: "dim9 required-flags is not a blacklist heading", skillName: "ok-skill", desc: "d",
+			body:   "## Required Flags\n- must set --name and --port\n- must set --config path\n",
+			dimNum: 9, wantFinal: 2, wantFlagPart: "no counter-example",
+		},
+		{
+			// Corpus fix: best-match — a thin early "Caution" note must not hide a
+			// later rich "Common Mistakes" table.
+			name: "dim9 richest section wins", skillName: "ok-skill", desc: "d",
+			body: "## Caution\nshort\n## Common Mistakes\n| a | b |\n| --- | --- |\n" +
+				"| c | d |\n| e | f |\n| g | h |\n",
+			dimNum: 9, wantFinal: 9, wantFlagPart: "points",
+		},
+		{
+			// Corpus fix: a boundary section IS failure-mode encoding, so a
+			// forward-only workflow with one is not penalised on dim3.
+			name: "dim3 boundary section satisfies failure encoding", skillName: "ok-skill", desc: "d",
+			body:   "Step 1: act\nStep 2: act more\n## Boundary\n- when not to apply this\n",
+			dimNum: 3, wantFinal: 10, wantPenalty: 0, wantFlagPart: "failure-handling section",
+		},
+		{
+			// Corpus fix: a "## Common Failures" section is failure-mode encoding.
+			name: "dim3 common failures section satisfies", skillName: "ok-skill", desc: "d",
+			body:   "Step 1: act\nStep 2: act more\n## Common Failures\n- forgot to rebuild\n",
+			dimNum: 3, wantFinal: 10, wantPenalty: 0, wantFlagPart: "failure-handling section",
+		},
+		{
+			// Corpus fix: inline "when ... blocked/fails" is failure handling, not
+			// just "if ... fail" (executing-plans' "Stop when blocked").
+			name: "dim3 inline when-blocked counts", skillName: "ok-skill", desc: "d",
+			body:   "Step 1: act\nStep 2: stop when blocked, don't guess",
+			dimNum: 3, wantFinal: 10, wantPenalty: 0, wantFlagPart: "failure branch",
+		},
+		{
+			// Corpus fix: English softening phrases fire (dims were Chinese-only).
+			name: "dim5 english softening penalised", skillName: "ok-skill", desc: "d",
+			body:   "do it as appropriate; it depends; you might want to",
+			dimNum: 5, wantFinal: 7, wantPenalty: 3, wantFlagPart: ">=3",
+		},
+		{
+			// Corpus fix: English AI-slop fires (dims were Chinese-only).
+			name: "dim7 english slop penalised", skillName: "ok-skill", desc: "d",
+			body:   "in other words, that said, in essence this works",
+			dimNum: 7, wantFinal: 7, wantPenalty: 3, wantFlagPart: "AI-slop",
+		},
+		{
+			// Inflection regression: "boundary" must match the "Boundaries" plural
+			// (y->ies rewrites the stem, so a prefix match alone misses it). This is
+			// the matryer/test-helper "B — Boundaries and Blind Spots" convention,
+			// under-scored across 12 corpus skills before the iesPlural probe.
+			name: "dim9 boundaries plural matches boundary signal", skillName: "ok-skill", desc: "d",
+			body: "## B — Boundaries and Blind Spots\n- fits single-service servers\n" +
+				"- be cautious with very large dependency lists\n" +
+				"- shared mutable state still needs synchronisation\n",
+			dimNum: 9, wantFinal: 9, wantFlagPart: "points",
+		},
+		{
+			// Vocabulary regression: a "## Known Limitations" section is a boundary
+			// section ("limitation" added to BlacklistHeadings).
+			name: "dim9 known limitations section", skillName: "ok-skill", desc: "d",
+			body: "## Known Limitations\n- does not support workspace mode\n" +
+				"- no Windows support yet\n- requires Go 1.26 or newer\n",
+			dimNum: 9, wantFinal: 9, wantFlagPart: "points",
+		},
+		{
+			// Fence-bug regression: a "## Common Mistakes" line inside a fenced code
+			// block is NOT a heading, so it must not create a phantom dim9 section.
+			// The old line-regex parser mistook it for a real counter-example section.
+			name: "dim9 heading inside code fence is not a section", skillName: "ok-skill", desc: "d",
+			body: "## Usage\n\n```bash\n## Common Mistakes\necho avoid this pattern\n```\n\n" +
+				"This skill applies the transformation described above to input files.\n",
+			dimNum: 9, wantFinal: 2, wantFlagPart: "no counter-example",
 		},
 	}
 	cfg := rubric.DefaultConfig()
@@ -239,9 +359,18 @@ func TestDiagnose(t *testing.T) {
 		},
 		{
 			name: "cluster dim3 lowest", skillName: "ok-skill",
-			// dim3 penalised (forward-only); dim4/dim9 satisfied so dim3 is the min.
-			body:          "Step 1: act\nStep 2: act more\n" + markers + "\n" + blacklist,
+			// Forward-only workflow with markers + a "## Blacklist" section that
+			// satisfies dim9 but is NOT a failure-handling heading, so dim3 stays min.
+			body: "Step 1: act\nStep 2: act more\n" + markers +
+				"\n## Blacklist\n- do not A\n- do not B\n- do not C\n",
 			wantTargetNum: 3, wantPriority: "P2", wantCluster: true,
+		},
+		{
+			// A structurally healthy skill (markers + a substantial boundary
+			// section, no penalties) has no deterministic weakness to flag.
+			name: "healthy skill defers to judge", skillName: "ok-skill",
+			body:          markers + "\n## Boundary\n- do not A\n- avoid B\n- never C\n- also D\n",
+			wantTargetNum: 0, wantPriority: "judge",
 		},
 		{
 			name: "non-cluster dim7 lowest", skillName: "ok-skill",

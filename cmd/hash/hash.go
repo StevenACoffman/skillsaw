@@ -48,6 +48,12 @@ changed anything.`,
 }
 
 func (cfg *Config) exec(_ context.Context, args []string) error {
+	if bad := root.MisplacedFlag(args); bad != "" {
+		return fmt.Errorf(
+			"hash: %q looks like a flag after arguments; put flags before positional arguments",
+			bad,
+		)
+	}
 	if len(args) == 0 {
 		return errors.New("hash: pass at least one SKILL_DIR or SKILL.md path")
 	}

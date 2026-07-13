@@ -1,5 +1,11 @@
 package rubric
 
+// healthyFinal is the per-dimension score at or above which a dimension is not a
+// deterministic weakness worth flagging. Needs-judge dims floor at 10 and derived
+// dims cap at 9, so without this bar the diagnosis would always point at whichever
+// derived dim sits at 9 — even on a structurally excellent skill.
+const healthyFinal = 8
+
 // Diagnosis is the deterministic half of a darwin Phase 2 optimization round
 // (spec §11.3 Step 1): identify the weakest dimension, warn about the
 // dim2/3/4 correlated cluster, and route to a strategy-library priority (§12).
@@ -37,6 +43,15 @@ func Diagnose(ev *Evaluation) Diagnosis {
 	if lowest == nil {
 		d.Target = "none"
 		d.Rationale = "no dimensions scored"
+		return d
+	}
+
+	// When even the weakest deterministic dimension is healthy, there is nothing
+	// specific to fix by machine: differentiation now depends on the judge dims.
+	if lowest.Final >= healthyFinal {
+		d.Target = "no deterministic weakness — score the judge dimensions"
+		d.Priority = "judge"
+		d.Rationale = "every deterministic dimension is healthy; further gains require judging dims 2/3/5/7/8"
 		return d
 	}
 
