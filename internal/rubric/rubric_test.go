@@ -183,16 +183,24 @@ func TestEvaluateDimensions(t *testing.T) {
 		{
 			// Corpus fix: a "Quality Red Line" section (violations that stop
 			// output) is a counter-example/blacklist section.
-			name: "dim9 quality red line section", skillName: "ok-skill", desc: "d",
-			body:   "## Quality Red Line\n- never ship without tests\n- do not skip the gate\n- avoid hand-editing\n",
-			dimNum: 9, wantFinal: 9, wantFlagPart: "points",
+			name:         "dim9 quality red line section",
+			skillName:    "ok-skill",
+			desc:         "d",
+			body:         "## Quality Red Line\n- never ship without tests\n- do not skip the gate\n- avoid hand-editing\n",
+			dimNum:       9,
+			wantFinal:    9,
+			wantFlagPart: "points",
 		},
 		{
 			// Corpus fix: "Required Flags" must NOT match the "red flag" signal
 			// (substring bug: "requi[red flag]s"). With no real section, dim9 = 2.
-			name: "dim9 required-flags is not a blacklist heading", skillName: "ok-skill", desc: "d",
-			body:   "## Required Flags\n- must set --name and --port\n- must set --config path\n",
-			dimNum: 9, wantFinal: 2, wantFlagPart: "no counter-example",
+			name:         "dim9 required-flags is not a blacklist heading",
+			skillName:    "ok-skill",
+			desc:         "d",
+			body:         "## Required Flags\n- must set --name and --port\n- must set --config path\n",
+			dimNum:       9,
+			wantFinal:    2,
+			wantFlagPart: "no counter-example",
 		},
 		{
 			// Corpus fix: best-match — a thin early "Caution" note must not hide a
@@ -205,9 +213,14 @@ func TestEvaluateDimensions(t *testing.T) {
 		{
 			// Corpus fix: a boundary section IS failure-mode encoding, so a
 			// forward-only workflow with one is not penalised on dim3.
-			name: "dim3 boundary section satisfies failure encoding", skillName: "ok-skill", desc: "d",
-			body:   "Step 1: act\nStep 2: act more\n## Boundary\n- when not to apply this\n",
-			dimNum: 3, wantFinal: 10, wantPenalty: 0, wantFlagPart: "failure-handling section",
+			name:         "dim3 boundary section satisfies failure encoding",
+			skillName:    "ok-skill",
+			desc:         "d",
+			body:         "Step 1: act\nStep 2: act more\n## Boundary\n- when not to apply this\n",
+			dimNum:       3,
+			wantFinal:    10,
+			wantPenalty:  0,
+			wantFlagPart: "failure-handling section",
 		},
 		{
 			// Corpus fix: a "## Common Failures" section is failure-mode encoding.
@@ -239,11 +252,15 @@ func TestEvaluateDimensions(t *testing.T) {
 			// (y->ies rewrites the stem, so a prefix match alone misses it). This is
 			// the matryer/test-helper "B — Boundaries and Blind Spots" convention,
 			// under-scored across 12 corpus skills before the iesPlural probe.
-			name: "dim9 boundaries plural matches boundary signal", skillName: "ok-skill", desc: "d",
+			name:      "dim9 boundaries plural matches boundary signal",
+			skillName: "ok-skill",
+			desc:      "d",
 			body: "## B — Boundaries and Blind Spots\n- fits single-service servers\n" +
 				"- be cautious with very large dependency lists\n" +
 				"- shared mutable state still needs synchronisation\n",
-			dimNum: 9, wantFinal: 9, wantFlagPart: "points",
+			dimNum:       9,
+			wantFinal:    9,
+			wantFlagPart: "points",
 		},
 		{
 			// Vocabulary regression: a "## Known Limitations" section is a boundary
@@ -257,10 +274,14 @@ func TestEvaluateDimensions(t *testing.T) {
 			// Fence-bug regression: a "## Common Mistakes" line inside a fenced code
 			// block is NOT a heading, so it must not create a phantom dim9 section.
 			// The old line-regex parser mistook it for a real counter-example section.
-			name: "dim9 heading inside code fence is not a section", skillName: "ok-skill", desc: "d",
+			name:      "dim9 heading inside code fence is not a section",
+			skillName: "ok-skill",
+			desc:      "d",
 			body: "## Usage\n\n```bash\n## Common Mistakes\necho avoid this pattern\n```\n\n" +
 				"This skill applies the transformation described above to input files.\n",
-			dimNum: 9, wantFinal: 2, wantFlagPart: "no counter-example",
+			dimNum:       9,
+			wantFinal:    2,
+			wantFlagPart: "no counter-example",
 		},
 	}
 	cfg := rubric.DefaultConfig()
@@ -373,10 +394,13 @@ func TestDiagnose(t *testing.T) {
 			wantTargetNum: 0, wantPriority: "judge",
 		},
 		{
-			name: "non-cluster dim7 lowest", skillName: "ok-skill",
+			name:      "non-cluster dim7 lowest",
+			skillName: "ok-skill",
 			// dim7 slop penalised; dim3 has fallback, dim4/dim9 satisfied.
 			body:          "Step 1: act\nfallback: retry\n说白了 换句话说 综上\n" + markers + "\n" + blacklist,
-			wantTargetNum: 7, wantPriority: "P3", wantCluster: false,
+			wantTargetNum: 7,
+			wantPriority:  "P3",
+			wantCluster:   false,
 		},
 	}
 	for _, tt := range tests {

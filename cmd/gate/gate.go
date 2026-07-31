@@ -57,6 +57,10 @@ rubric total — see "skillsaw eval"). Outcomes:
   accept            candidate > current only                   -> keep, best unchanged
   reject            candidate <= current                       -> revert
 
+The action above is the disposition axis. The result also reports a separate
+measured axis — status (improved/tie/regressed) and delta (candidate-current) —
+so a high or improved score is not conflated with the keep/revert decision.
+
 Exit code is 0 on any accept, 1 on reject, so a script can branch on it.`,
 		Flags: cfg.Flags,
 		Exec:  cfg.exec,
@@ -101,7 +105,7 @@ func (cfg *Config) exec(_ context.Context, _ []string) error {
 			return fmt.Errorf("gate: encode json: %w", err)
 		}
 	} else {
-		_, _ = fmt.Fprintf(cfg.Stdout, "%s\n", res.Action)
+		_, _ = fmt.Fprintf(cfg.Stdout, "%s (%s, delta %+.1f)\n", res.Action, res.Status, res.Delta)
 		_, _ = fmt.Fprintf(cfg.Stdout, "  current -> %.1f\n  best    -> %.1f (step %d)\n",
 			res.CurrentScore, res.BestScore, res.BestStep)
 	}

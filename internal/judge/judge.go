@@ -67,6 +67,11 @@ func Score(output string, checks []Check) (Result, error) {
 // malformed check (bad regex, non-numeric length) fails with an explanatory
 // reason rather than panicking — check authoring errors are surfaced, not fatal.
 func (c Check) eval(output string) (pass bool, why string) {
+	// Objective answer-scorers (objective.go) are tried first; handled==false
+	// falls through to the text-matching ops here.
+	if handled, ok, reason := evalObjective(c.Op, output, c.Arg); handled {
+		return ok, reason
+	}
 	switch c.Op {
 	case OpSectionPresent:
 		return evalSectionPresent(output, c.Arg)

@@ -84,6 +84,34 @@ func TestSelectScore(t *testing.T) {
 	}
 }
 
+func TestEvaluateStatusAndDelta(t *testing.T) {
+	t.Parallel()
+	// Status/Delta are the measured axis, independent of the accept/reject action.
+	tests := []struct {
+		name       string
+		cand       float64
+		current    float64
+		wantStatus gate.Status
+		wantDelta  float64
+	}{
+		{name: "improved", cand: 88, current: 84, wantStatus: gate.Improved, wantDelta: 4},
+		{name: "tie", cand: 84, current: 84, wantStatus: gate.Tie, wantDelta: 0},
+		{name: "regressed", cand: 80, current: 84, wantStatus: gate.Regressed, wantDelta: -4},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := gate.Evaluate(tt.cand, tt.current, tt.current, 0, 0)
+			if got.Status != tt.wantStatus {
+				t.Errorf("Status = %q, want %q", got.Status, tt.wantStatus)
+			}
+			if math.Abs(got.Delta-tt.wantDelta) > eps {
+				t.Errorf("Delta = %v, want %v", got.Delta, tt.wantDelta)
+			}
+		})
+	}
+}
+
 func TestEvaluate(t *testing.T) {
 	t.Parallel()
 	// Mirrors SkillOpt's evaluate_gate: strict ">" at both comparisons.

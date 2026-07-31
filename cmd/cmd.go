@@ -16,6 +16,7 @@ import (
 	"github.com/peterbourgon/ff/v4"
 	"github.com/peterbourgon/ff/v4/ffhelp"
 
+	"github.com/StevenACoffman/skillsaw/cmd/activation"
 	"github.com/StevenACoffman/skillsaw/cmd/diagnose"
 	"github.com/StevenACoffman/skillsaw/cmd/eval"
 	"github.com/StevenACoffman/skillsaw/cmd/gate"
@@ -38,6 +39,7 @@ import (
 func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	r := root.New(stdin, stdout, stderr)
 	version.New(r)
+	activation.New(r)
 	eval.New(r)
 	scan.New(r)
 	diagnose.New(r)
@@ -50,6 +52,17 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	if err := r.Command.Parse(args, ff.WithEnvVarPrefix("SKILLSAW")); err != nil {
 		_, _ = fmt.Fprintf(stderr, "\n%s\n", ffhelp.Command(r.Command))
 		return fmt.Errorf("parse: %w", err)
+	}
+
+	// An unmatched token leaves the selected command a group parent (Exec == nil)
+	// with a leftover positional. Without this it would fall through to Run,
+	// return ff.ErrNoExec, and exit 0 — indistinguishable from a bare invocation.
+	// A bare invocation has no leftover arg and is left to the ErrNoExec path.
+	if sel := r.Command.GetSelected(); sel.Exec == nil {
+		if rest := sel.Flags.GetArgs(); len(rest) > 0 {
+			_, _ = fmt.Fprintf(stderr, "\n%s\n", ffhelp.Command(sel))
+			return fmt.Errorf("%s: unknown subcommand %q", sel.Name, rest[0])
+		}
 	}
 
 	if err := r.Command.Run(ctx); err != nil {
