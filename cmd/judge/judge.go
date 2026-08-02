@@ -14,9 +14,9 @@ import (
 
 	"github.com/peterbourgon/ff/v4"
 
+	judgelib "github.com/StevenACoffman/skillet/judge"
+	"github.com/StevenACoffman/skillet/testprompts"
 	"github.com/StevenACoffman/skillsaw/cmd/root"
-	judgelib "github.com/StevenACoffman/skillsaw/internal/judge"
-	"github.com/StevenACoffman/skillsaw/internal/testprompts"
 )
 
 const (

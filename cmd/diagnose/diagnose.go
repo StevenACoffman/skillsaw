@@ -12,9 +12,9 @@ import (
 
 	"github.com/peterbourgon/ff/v4"
 
+	"github.com/StevenACoffman/skillet/skill"
 	"github.com/StevenACoffman/skillsaw/cmd/root"
 	"github.com/StevenACoffman/skillsaw/internal/rubric"
-	"github.com/StevenACoffman/skillsaw/internal/skill"
 )
 
 // Config holds the diagnose command configuration.

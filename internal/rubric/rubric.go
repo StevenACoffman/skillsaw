@@ -19,9 +19,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/StevenACoffman/skillsaw/internal/markdown"
-	"github.com/StevenACoffman/skillsaw/internal/neutrality"
-	"github.com/StevenACoffman/skillsaw/internal/skill"
+	"github.com/StevenACoffman/skillet/identity"
+	"github.com/StevenACoffman/skillet/markdown"
+	"github.com/StevenACoffman/skillet/neutrality"
+	"github.com/StevenACoffman/skillet/skill"
 )
 
 // descCharLimit is the Agent Skills description length cap (spec §8.2 dim1).
@@ -177,7 +178,7 @@ func ParseScores(data []byte) (map[int]int, error) {
 // score for every needs-judge dimension, also computes the full rubric total.
 // It reads a sibling README.md (if present) for the runtime-neutrality scan.
 func EvaluateWithBases(s *skill.Skill, cfg *Config, bases map[int]int) *Evaluation {
-	ev := &Evaluation{Skill: s.Name, Hash: skill.Hash(s.Raw), Bytes: s.Bytes}
+	ev := &Evaluation{Skill: s.Name, Hash: identity.Hash(s.Raw), Bytes: s.Bytes}
 	if ev.Skill == "" {
 		ev.Skill = filepath.Base(s.Dir)
 	}

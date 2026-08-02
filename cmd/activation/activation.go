@@ -12,10 +12,10 @@ import (
 
 	"github.com/peterbourgon/ff/v4"
 
+	"github.com/StevenACoffman/skillet/ratchet"
+	"github.com/StevenACoffman/skillet/skill"
+	"github.com/StevenACoffman/skillet/testprompts"
 	"github.com/StevenACoffman/skillsaw/cmd/root"
-	activationlib "github.com/StevenACoffman/skillsaw/internal/activation"
-	"github.com/StevenACoffman/skillsaw/internal/skill"
-	"github.com/StevenACoffman/skillsaw/internal/testprompts"
 )
 
 // Config holds the activation command configuration.
@@ -29,8 +29,8 @@ type Config struct {
 
 // report pairs a skill name with its activation result for output.
 type report struct {
-	Skill      string               `json:"skill"`
-	Activation activationlib.Report `json:"activation"`
+	Skill      string         `json:"skill"`
+	Activation ratchet.Report `json:"activation"`
 }
 
 // New creates and registers the activation command.
@@ -109,7 +109,7 @@ func scoreDir(dir string) (report, error) {
 	triggers, decoys := split(f)
 	return report{
 		Skill:      filepath.Base(dir),
-		Activation: activationlib.Score(s.Description, triggers, decoys),
+		Activation: ratchet.Score(s.Description, triggers, decoys),
 	}, nil
 }
 

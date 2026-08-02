@@ -5,7 +5,7 @@
 // an edit loop; neither performs I/O.
 package edit
 
-import "github.com/StevenACoffman/skillsaw/internal/skill"
+import "github.com/StevenACoffman/skillet/identity"
 
 // WithinSizeBudget reports whether an edited skill of newBytes stays within
 // ratio × origBytes (darwin's default ratio is 1.5). A non-positive origBytes
@@ -18,8 +18,8 @@ func WithinSizeBudget(origBytes, newBytes int, ratio float64) bool {
 }
 
 // IsNoOp reports whether before and after are the same skill under the content
-// identity used everywhere in skillsaw (skill.Hash, spec §8.7). An edit that
-// leaves the hash unchanged did nothing and need not be re-evaluated.
+// identity used everywhere (identity.Hash, spec §8.7). An edit that leaves the
+// hash unchanged did nothing and need not be re-evaluated.
 func IsNoOp(before, after string) bool {
-	return skill.Hash(before) == skill.Hash(after)
+	return identity.Hash(before) == identity.Hash(after)
 }

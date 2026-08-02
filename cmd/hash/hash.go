@@ -13,8 +13,8 @@ import (
 
 	"github.com/peterbourgon/ff/v4"
 
+	"github.com/StevenACoffman/skillet/identity"
 	"github.com/StevenACoffman/skillsaw/cmd/root"
-	"github.com/StevenACoffman/skillsaw/internal/skill"
 )
 
 // Config holds the hash command configuration.
@@ -69,7 +69,7 @@ func (cfg *Config) exec(_ context.Context, args []string) error {
 			failed = true
 			continue
 		}
-		_, _ = fmt.Fprintf(cfg.Stdout, "%s  %s\n", skill.Hash(string(b)), path)
+		_, _ = fmt.Fprintf(cfg.Stdout, "%s  %s\n", identity.Hash(string(b)), path)
 	}
 	if failed {
 		return root.ExitError(1)

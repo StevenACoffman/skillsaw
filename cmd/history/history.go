@@ -12,8 +12,8 @@ import (
 
 	"github.com/peterbourgon/ff/v4"
 
+	"github.com/StevenACoffman/skillet/auditlog"
 	"github.com/StevenACoffman/skillsaw/cmd/root"
-	"github.com/StevenACoffman/skillsaw/internal/store"
 )
 
 // Config holds the history command configuration.
@@ -67,7 +67,7 @@ func (cfg *Config) exec(_ context.Context, _ []string) error {
 	}
 	defer func() { _ = f.Close() }()
 
-	rows, err := store.Read(f)
+	rows, err := auditlog.Read(f)
 	if err != nil {
 		return fmt.Errorf("history: %w", err)
 	}
@@ -76,9 +76,9 @@ func (cfg *Config) exec(_ context.Context, _ []string) error {
 }
 
 // render writes the header and matching rows to stdout and prints a tally.
-func (cfg *Config) render(rows []store.Row) {
+func (cfg *Config) render(rows []auditlog.Row) {
 	tw := tabwriter.NewWriter(cfg.Stdout, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(tw, strings.ToUpper(strings.Join(store.Columns(), "\t")))
+	_, _ = fmt.Fprintln(tw, strings.ToUpper(strings.Join(auditlog.Columns(), "\t")))
 
 	shown, kept, reverted := 0, 0, 0
 	for i := range rows {
@@ -88,11 +88,11 @@ func (cfg *Config) render(rows []store.Row) {
 		}
 		shown++
 		switch r.Status {
-		case store.StatusKeep:
+		case auditlog.StatusKeep:
 			kept++
-		case store.StatusRevert:
+		case auditlog.StatusRevert:
 			reverted++
-		case store.StatusBaseline, store.StatusError:
+		case auditlog.StatusBaseline, auditlog.StatusError:
 			// counted in shown only
 		}
 		_, _ = fmt.Fprintln(tw, strings.Join(r.Fields(), "\t"))

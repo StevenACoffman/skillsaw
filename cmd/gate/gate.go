@@ -13,8 +13,8 @@ import (
 
 	"github.com/peterbourgon/ff/v4"
 
+	"github.com/StevenACoffman/skillet/ratchet"
 	"github.com/StevenACoffman/skillsaw/cmd/root"
-	gatelib "github.com/StevenACoffman/skillsaw/internal/gate"
 )
 
 // Config holds the gate command configuration.
@@ -96,7 +96,7 @@ func (cfg *Config) exec(_ context.Context, _ []string) error {
 		return err
 	}
 
-	res := gatelib.Evaluate(cand, current, best, bestStep, globalStep)
+	res := ratchet.Evaluate(cand, current, best, bestStep, globalStep)
 
 	if cfg.JSON {
 		enc := json.NewEncoder(cfg.Stdout)
@@ -110,7 +110,7 @@ func (cfg *Config) exec(_ context.Context, _ []string) error {
 			res.CurrentScore, res.BestScore, res.BestStep)
 	}
 
-	if res.Action == gatelib.Reject {
+	if res.Action == ratchet.Reject {
 		return root.ExitError(1)
 	}
 	return nil
