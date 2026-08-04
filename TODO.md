@@ -95,9 +95,14 @@ model-free commands. skillsaw stays deterministic — the model tier stays exter
 
 ## Cross-repo (shared with exegesis)
 
-- [ ] Extract the `test-prompts.json` + `checks` schema and the agentskills.io
+- [x] Extract the `test-prompts.json` + `checks` schema and the agentskills.io
       frontmatter lint into a **shared Go module** so skillsaw and exegesis cannot
-      drift. Until then both sides keep byte-identical JSON tags by hand.
+      drift. DONE (2026-08-03): the schema was already shared via `skillet/testprompts`
+      + `skillet/judge`; the frontmatter spec now lives in `skillet/speclint`. The
+      rubric's dim-1 `checkFrontmatter` sources the description cap from
+      `speclint.DescriptionMaxRunes` (its own local `descCharLimit` is gone), so the
+      1024-rune cap can't diverge from exegesis by hand. The rubric's scoring weights
+      (penalties/flags) stay in skillsaw — they're rubric policy, not the spec.
 
 ## Housekeeping
 
@@ -107,3 +112,11 @@ model-free commands. skillsaw stays deterministic — the model tier stays exter
       detects a selected group parent (`Exec == nil`) with a leftover positional
       after Parse and returns `"<cmd>: unknown subcommand \"x\""` (exit 1); a bare
       invocation still returns `ff.ErrNoExec` → exit 0.
+- [ ] Fill in the root `ShortHelp` — still the scaffold placeholder
+      `"TODO: describe skillsaw here"` (`cmd/root/root.go`). `climax lint` flags it
+      as un-filled help; give it a real description (and a `LongHelp` listing the
+      subcommands), as exegesis already did. (survey 2026-08-02)
+- [ ] Doc-sync: `README.md` (package map, lines ~234-239) and `improvements_plan.md`
+      still describe `internal/{skill,neutrality,judge,gate,store}` as local, but they
+      were extracted to skillet and no longer exist on disk. Update the docs to point
+      at `skillet/{skill,neutrality,judge,ratchet,auditlog,...}`. (survey 2026-08-02)

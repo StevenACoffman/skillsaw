@@ -16,9 +16,9 @@ import (
 
 	"github.com/peterbourgon/ff/v4"
 
+	"github.com/StevenACoffman/skillet/skill"
 	"github.com/StevenACoffman/skillsaw/cmd/root"
 	"github.com/StevenACoffman/skillsaw/internal/rubric"
-	"github.com/StevenACoffman/skillsaw/internal/skill"
 )
 
 // Config holds the eval command configuration.
@@ -79,7 +79,7 @@ func (cfg *Config) exec(_ context.Context, args []string) error {
 	}
 	dirs := args
 	if cfg.All {
-		found, err := skill.DiscoverRoots(cfg.Roots)
+		found, err := skill.DiscoverRoots(".", root.SplitRoots(cfg.Roots))
 		if err != nil {
 			return fmt.Errorf("eval: %w", err)
 		}

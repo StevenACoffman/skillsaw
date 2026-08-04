@@ -19,13 +19,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/StevenACoffman/skillsaw/internal/markdown"
-	"github.com/StevenACoffman/skillsaw/internal/neutrality"
-	"github.com/StevenACoffman/skillsaw/internal/skill"
+	"github.com/StevenACoffman/skillet/identity"
+	"github.com/StevenACoffman/skillet/markdown"
+	"github.com/StevenACoffman/skillet/neutrality"
+	"github.com/StevenACoffman/skillet/skill"
+	"github.com/StevenACoffman/skillet/speclint"
 )
-
-// descCharLimit is the Agent Skills description length cap (spec §8.2 dim1).
-const descCharLimit = 1024
 
 // These are the *semantic* patterns the rubric still owns. Markdown structure
 // (headings, lists, tables, links, code fences) is now parsed by the markdown
@@ -177,7 +176,7 @@ func ParseScores(data []byte) (map[int]int, error) {
 // score for every needs-judge dimension, also computes the full rubric total.
 // It reads a sibling README.md (if present) for the runtime-neutrality scan.
 func EvaluateWithBases(s *skill.Skill, cfg *Config, bases map[int]int) *Evaluation {
-	ev := &Evaluation{Skill: s.Name, Hash: skill.Hash(s.Raw), Bytes: s.Bytes}
+	ev := &Evaluation{Skill: s.Name, Hash: identity.Hash(s.Raw), Bytes: s.Bytes}
 	if ev.Skill == "" {
 		ev.Skill = filepath.Base(s.Dir)
 	}
@@ -264,9 +263,10 @@ func checkFrontmatter(s *skill.Skill, cfg *Config, ds *DimScore) {
 		ds.Penalty += 3
 		ds.Flags = append(ds.Flags, "missing description")
 	}
-	if len([]rune(desc)) > descCharLimit {
+	if len([]rune(desc)) > speclint.DescriptionMaxRunes {
 		ds.Penalty += 2
-		ds.Flags = append(ds.Flags, "description over 1024 chars")
+		ds.Flags = append(ds.Flags, fmt.Sprintf(
+			"description over %d chars", speclint.DescriptionMaxRunes))
 	}
 	for _, tail := range cfg.FillerTails {
 		if strings.HasSuffix(strings.TrimRight(desc, "。.\" '"), tail) {

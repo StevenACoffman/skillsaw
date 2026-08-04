@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/StevenACoffman/skillet/skill"
 	"github.com/StevenACoffman/skillsaw/internal/rubric"
-	"github.com/StevenACoffman/skillsaw/internal/skill"
 )
 
 // markers is the three explicit markers a well-formed skill uses to satisfy
