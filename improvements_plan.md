@@ -4,6 +4,12 @@ Implements the six follow-ups identified by comparing skillsaw against the darwi
 spec and the SkillOpt / SkillLens sources, and brings the whole module to a clean
 `golangci-lint run ./...` **without relaxing any rule** in `.golangci.yaml`.
 
+> **Note (2026-08-05):** the `internal/*` packages this plan creates below —
+> `skill`, `neutrality`, `judge`, `gate`, and `store` — were subsequently extracted
+> to the shared `skillet` module and no longer exist under `internal/`. Read them as
+> `skillet/{skill,neutrality,judge,ratchet,auditlog}` (`gate`→`ratchet`,
+> `store`→`auditlog`). Only `internal/rubric` and `internal/edit` remain local.
+
 Guiding rules (from `~/Documents/agent-orange/go-advice/summary_rules.md`), applied
 throughout:
 
