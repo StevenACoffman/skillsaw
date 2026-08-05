@@ -121,3 +121,18 @@ model-free commands. skillsaw stays deterministic — the model tier stays exter
       (`gate`→`ratchet`, `store`→`auditlog`); the pure-core note spans both.
       `improvements_plan.md` carries a banner mapping its historical `internal/*` paths
       to their skillet homes rather than rewriting the plan's steps.
+
+## Cross-repo alignment (2026-08-05 survey)
+
+- [ ] **Bump skillet v0.1.0 → v0.5.0 — highest-priority drift exposure in the family.**
+      skillsaw is five minor versions behind the shared kernel and shares
+      `speclint`/`judge`/`testprompts` with exegesis (on v0.4.0). Sharing those across
+      four versions is exactly the frontmatter/scoring drift skillet was extracted to
+      prevent, so this is the most important alignment step, not a routine bump. v0.5.0
+      also brings `ratchet`/`stats` refinements, `ruleset` (+`SourceAnchor`), and the
+      `toerr.WrapWithMessage`/`wrapcheck` integration. Re-run the suite after the bump —
+      `speclint.DescriptionMaxRunes` and the `judge`/`testprompts` shapes are the seams
+      most likely to have moved.
+- Note: `RULES.md` (138 KB) and `improvements_plan.md` describe the pre-migration
+      `internal/*` layout; both are historical references (the latter already banners
+      this), not the current package map — the README package map is authoritative.
