@@ -112,11 +112,12 @@ model-free commands. skillsaw stays deterministic — the model tier stays exter
       detects a selected group parent (`Exec == nil`) with a leftover positional
       after Parse and returns `"<cmd>: unknown subcommand \"x\""` (exit 1); a bare
       invocation still returns `ff.ErrNoExec` → exit 0.
-- [ ] Fill in the root `ShortHelp` — still the scaffold placeholder
-      `"TODO: describe skillsaw here"` (`cmd/root/root.go`). `climax lint` flags it
-      as un-filled help; give it a real description (and a `LongHelp` listing the
-      subcommands), as exegesis already did. (survey 2026-08-02)
-- [ ] Doc-sync: `README.md` (package map, lines ~234-239) and `improvements_plan.md`
-      still describe `internal/{skill,neutrality,judge,gate,store}` as local, but they
-      were extracted to skillet and no longer exist on disk. Update the docs to point
-      at `skillet/{skill,neutrality,judge,ratchet,auditlog,...}`. (survey 2026-08-02)
+- [x] Fill in the root `ShortHelp` — DONE: `cmd/root/root.go` now has a real ShortHelp
+      ("deterministically score, diagnose, and validate Agent Skills") and a `LongHelp`
+      listing the subcommands, mirroring exegesis. `climax lint` no longer flags it.
+- [x] Doc-sync: `README.md` and `improvements_plan.md` — DONE. The README package map
+      now lists only the local `internal/{rubric,edit}` and a separate block for the
+      extracted `skillet/{skill,neutrality,judge,ratchet,auditlog,speclint,testprompts}`
+      (`gate`→`ratchet`, `store`→`auditlog`); the pure-core note spans both.
+      `improvements_plan.md` carries a banner mapping its historical `internal/*` paths
+      to their skillet homes rather than rewriting the plan's steps.
