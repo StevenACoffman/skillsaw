@@ -225,24 +225,32 @@ measurable signals first and reserve the model for what genuinely can't be measu
 
 A [climax](https://github.com/StevenACoffman/climax) / [ff/v4](https://github.com/peterbourgon/ff)
 CLI: `main.go` wires nothing but the dispatcher; `cmd/<name>/` holds one command
-each; the pure domain logic lives in `internal/`.
+each; the pure domain logic lives in `internal/` and in the shared `skillet` module.
 
 ```text
 main.go                  entry point (signal handling, exit codes)
 cmd/cmd.go               dispatcher — registers every command
 cmd/<name>/<name>.go     one command per package (thin I/O shell)
-internal/skill/          parse SKILL.md, content hash, slug, discovery
 internal/rubric/         9-dimension scoring, deterministic checks, diagnosis
-internal/neutrality/     runtime-neutrality red-light scan
-internal/judge/          rule-judge operators (behavioral dim-8 scoring)
-internal/gate/           validation-gate accept/reject decision
-internal/store/          read/write the results.tsv log
 internal/edit/           size-budget + no-op guards for an edit step
 ```
 
-The design keeps a **pure core / imperative shell** split: everything in
-`internal/` is value-in, value-out with no I/O; file and stdout access lives only
-in the command `exec` methods.
+The rest of the domain logic was extracted to the shared `skillet` module so
+skillsaw and exegesis cannot drift:
+
+```text
+skillet/skill            parse SKILL.md, content hash, slug, discovery
+skillet/neutrality       runtime-neutrality red-light scan
+skillet/judge            rule-judge operators (behavioral dim-8 scoring)
+skillet/ratchet          validation-gate accept/reject decision
+skillet/auditlog         read/write the results.tsv log
+skillet/speclint         agentskills.io frontmatter spec (rubric dim-1)
+skillet/testprompts      the shared test-prompts.json contract
+```
+
+The design keeps a **pure core / imperative shell** split: everything in `internal/`
+and the shared `skillet` domain packages is value-in, value-out with no I/O; file and
+stdout access lives only in the command `exec` methods.
 
 ---
 
