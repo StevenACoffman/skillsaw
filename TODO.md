@@ -124,15 +124,14 @@ model-free commands. skillsaw stays deterministic — the model tier stays exter
 
 ## Cross-repo alignment (2026-08-05 survey)
 
-- [ ] **Bump skillet v0.1.0 → v0.5.0 — highest-priority drift exposure in the family.**
-      skillsaw is five minor versions behind the shared kernel and shares
-      `speclint`/`judge`/`testprompts` with exegesis (on v0.4.0). Sharing those across
-      four versions is exactly the frontmatter/scoring drift skillet was extracted to
-      prevent, so this is the most important alignment step, not a routine bump. v0.5.0
-      also brings `ratchet`/`stats` refinements, `ruleset` (+`SourceAnchor`), and the
-      `toerr.WrapWithMessage`/`wrapcheck` integration. Re-run the suite after the bump —
-      `speclint.DescriptionMaxRunes` and the `judge`/`testprompts` shapes are the seams
-      most likely to have moved.
+- [x] **Bump skillet v0.1.0 → v0.5.0 — the family's biggest drift exposure, now closed.**
+      DONE (2026-08-05): go.mod/go.sum only — no code change even across the four-minor jump,
+      4 packages test green, `golangci-lint` clean. The seams most likely to have moved —
+      `speclint.DescriptionMaxRunes`, the `judge`/`testprompts` shapes, and the
+      `ratchet`/`stats` refinements — were all additive, so the suite passed untouched.
+      `go mod tidy` did not add `toerr` (skillsaw imports nothing that reaches
+      `ruleset/synthesize`). skillsaw now shares the same `speclint`/`testprompts` revision
+      as exegesis, closing the drift skillet was extracted to prevent.
 - Note: `RULES.md` (138 KB) and `improvements_plan.md` describe the pre-migration
       `internal/*` layout; both are historical references (the latter already banners
       this), not the current package map — the README package map is authoritative.
