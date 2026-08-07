@@ -23,6 +23,7 @@ import (
 	"github.com/StevenACoffman/skillsaw/cmd/hash"
 	"github.com/StevenACoffman/skillsaw/cmd/history"
 	"github.com/StevenACoffman/skillsaw/cmd/judge"
+	"github.com/StevenACoffman/skillsaw/cmd/preflight"
 	"github.com/StevenACoffman/skillsaw/cmd/root"
 	"github.com/StevenACoffman/skillsaw/cmd/scan"
 	"github.com/StevenACoffman/skillsaw/cmd/version"
@@ -47,6 +48,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	gate.New(r)
 	history.New(r)
 	judge.New(r)
+	preflight.New(r)
 	// register new commands here
 
 	if err := r.Command.Parse(args, ff.WithEnvVarPrefix("SKILLSAW")); err != nil {

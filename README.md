@@ -45,7 +45,18 @@ skillsaw diagnose ~/path/to/my-skill
 
 # Fail CI if a skill is bound to a single runtime
 skillsaw scan --all
+
+# Reject an edit that broke structure, whatever it scored
+skillsaw preflight ~/path/to/my-skill
 ```
+
+`preflight` is the structural half of a double-gated pipeline: `gate` decides on
+score, `preflight` on structure. It is deliberately the stricter of the two —
+`eval` only *penalises* a blown description cap, so a gain elsewhere can outweigh
+it, whereas an edit failing `preflight` is rejected outright. Add `--redlines` to
+also enforce book2skill's Quality Red Lines (the six RIA-TV++ segments, the
+quotation ceiling, a description that states a trigger); those are opt-in because
+a hand-written skill has no reason to carry that structure.
 
 ```text
 $ skillsaw eval ~/skills/darwin-skill
