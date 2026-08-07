@@ -176,14 +176,20 @@ Source: `~/Documents/agent-orange/gemini_skills/processing/gap_analysis.md`.
       Not done: the agent-facing loop in `~/skills/skillsaw-skill/SKILL.md` still does not call
       `preflight`. It should run between STEP 2's edit and the `gate` decision, with
       `--redlines` when the tree is a book. That file is outside this repo.
-- [x] **Surface a frontmatter parse failure as itself.** DONE (2026-08-06) in skillet:
-      `Skill.FrontmatterErr` records the YAML error and `speclint.Frontmatter` reports it
-      instead of the symptoms it used to produce. The book skill that prompted this went
-      from 3 defects — including a false `description is empty` — to 1 naming `[10:45]`
-      with a caret at the offending quote. **Needs skillet > v0.8.0 to reach skillsaw**;
-      verified locally through a `go.work`. Residual: exegesis's own `name != folder`
-      check lives outside speclint and still fires on the empty name, so it now appears
-      beside the true cause rather than instead of it.
+- [x] **Surface a frontmatter parse failure as itself.** DONE (2026-08-06), shipped and live
+      here on skillet v0.10.0. `Skill.FrontmatterErr` records the YAML error, and every check
+      that reads a field out of the parsed block now declines to speak: `speclint.Frontmatter`
+      reports the error instead of an empty description, and `redlines.Check` no longer
+      demands a trigger condition of prose the parser could not reach.
+      Checks that read the *body* were deliberately left running — `splitFrontmatter`
+      produces it before the parse is attempted — which is why the real 219-word quotation on
+      the skill that exposed this survives.
+      Measured: `preflight --redlines` on
+      `books/site-reliability-engineering/blameless-postmortem-process` reports **2** defects,
+      both true — the YAML error at `[10:45]` and that quotation. Before the chain it produced
+      four, two of which were consequences of the one syntax error. The residual noted here
+      earlier — exegesis's own name/folder check firing on a name it could not read — closed
+      in exegesis#13.
 - [ ] **Consume `skills-manifest.json`: a hash-keyed skip list for the *agent's* judge
       pass (not an `--incremental` flag on the deterministic CLI).**
       **Correction to the premise:** the analysis attributes "up to 90% in LLM API costs"
