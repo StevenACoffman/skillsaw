@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -19,6 +20,7 @@ import (
 	"github.com/StevenACoffman/skillet/skill"
 	"github.com/StevenACoffman/skillsaw/cmd/root"
 	"github.com/StevenACoffman/skillsaw/internal/rubric"
+	"github.com/StevenACoffman/skillsaw/internal/scores"
 )
 
 // Config holds the eval command configuration.
@@ -43,6 +45,8 @@ func New(parent *root.Config) *Config {
 		"comma-separated skill roots for --all")
 	cfg.Flags.StringVar(&cfg.Scores, 's', "scores", "",
 		"path to judge-supplied per-dimension bases (JSON) enabling the full total")
+	// The two accepted shapes are documented in LongHelp rather than here: a flag
+	// description that ran to a JSON example would crowd out every other flag.
 	cfg.Flags.BoolVar(&cfg.JSON, 0, "json", "emit evaluations as JSON")
 	cfg.Flags.BoolVar(&cfg.Verbose, 'v', "verbose", "show per-dimension breakdown")
 	cfg.Command = &ff.Command{
@@ -62,7 +66,25 @@ assumed perfect and docked only for objectively detectable defects, so the score
 is a lower bound on quality loss — a lint-style floor, not the full rubric total.
 
 Pass skill directories, or --all to scan the roots (default covers Claude Code,
-Cursor, Codex, and .agents layouts).`,
+Cursor, Codex, and .agents layouts).
+
+--scores supplies the judge bases that turn the deterministic floor into the FULL
+total. Two shapes are accepted:
+
+  {"1": 8, "2": 7}                              the original shape
+  {"entries": [{"skill": "alpha",               bases bound to the version
+                "hash": "6fc378f9aabb0b67",     they were judged against
+                "bases": {"1": 8, "2": 7}}]}
+
+A base is a number someone assigned after reading a particular version of a skill,
+and nothing about it survives an edit. In the second shape each entry names the
+content hash it was judged against, bases are matched to each skill separately, and
+a skill whose hash has moved is reported rather than scored -- so an edit cannot
+quietly inherit the total of the text before it. The run exits non-zero if any skill
+is in that state, after scoring the rest.
+
+The first shape records no version, so it cannot be checked against one; it keeps
+its original meaning and applies to whatever it is given.`,
 		Flags: cfg.Flags,
 		Exec:  cfg.exec,
 	}
@@ -89,31 +111,60 @@ func (cfg *Config) exec(_ context.Context, args []string) error {
 		return errors.New("eval: no skills found; pass SKILL_DIR arguments or use --all")
 	}
 
-	bases, err := cfg.loadScores()
+	judged, err := cfg.loadScores()
 	if err != nil {
 		return err
 	}
-	evals := cfg.gather(dirs, bases)
+	evals, stale := cfg.gather(dirs, judged)
 	if len(evals) == 0 {
 		return root.ExitError(1)
 	}
-	return cfg.output(evals)
+	if err := cfg.output(evals); err != nil {
+		return err
+	}
+	// Reported after every skill is scored, not on the first one: with --all a single
+	// stale entry must not hide the other verdicts. But a total built on bases judged
+	// against different text is not comparable to the ones beside it, and in the
+	// optimize loop it is what decides keep-or-revert -- so the run still fails.
+	if stale > 0 {
+		return root.ExitError(1)
+	}
+	return nil
 }
 
 // gather loads and evaluates each directory, skipping (with a note) any that
-// fail to load.
-func (cfg *Config) gather(dirs []string, bases map[int]int) []*rubric.Evaluation {
+// fail to load, and returns how many were judged against a different version.
+//
+// Bases are looked up per skill rather than applied to the whole run. One map for every
+// directory meant that "--all --scores" gave all 233 skills one skill's judge bases and
+// called every full total comparable.
+func (cfg *Config) gather(dirs []string, judged *scores.File) ([]*rubric.Evaluation, int) {
 	rcfg := rubric.DefaultConfig()
 	evals := make([]*rubric.Evaluation, 0, len(dirs))
+	stale := 0
 	for _, dir := range dirs {
 		s, err := skill.Load(dir)
 		if err != nil {
 			_, _ = fmt.Fprintf(cfg.Stderr, "skip %s: %v\n", dir, err)
 			continue
 		}
+		name := s.Name
+		if name == "" {
+			name = filepath.Base(dir)
+		}
+		hash := s.Hash()
+		bases, wasStale := judged.Bases(name, hash)
+		if wasStale {
+			stale++
+			// Name both versions: the reader has to know it is looking at an edit that
+			// outran its judgment, not at a skill nobody has scored yet.
+			_, _ = fmt.Fprintf(cfg.Stderr,
+				"%s: judged at %s but is now %s; re-judge it (its bases were not applied)\n",
+				name, judged.JudgedAt(name), hash)
+		}
 		evals = append(evals, rubric.EvaluateWithBases(s, rcfg, bases))
 	}
-	return evals
+	return evals, stale
 }
 
 // output renders evaluations as JSON (--json) or the scorecard table (+ optional
@@ -136,22 +187,22 @@ func (cfg *Config) output(evals []*rubric.Evaluation) error {
 	return nil
 }
 
-// loadScores reads and parses the optional judge-supplied bases file. When no
-// file is set it returns an empty (non-nil) map — "no bases", which yields no
-// full score without tripping the nil-nil return rule.
-func (cfg *Config) loadScores() (map[int]int, error) {
+// loadScores reads and parses the optional judge-supplied bases file. With no file set
+// it returns an empty document — "nothing judged" — rather than nil, so every caller
+// can ask it questions without a nil check.
+func (cfg *Config) loadScores() (*scores.File, error) {
 	if cfg.Scores == "" {
-		return map[int]int{}, nil
+		return &scores.File{}, nil
 	}
 	data, err := os.ReadFile(cfg.Scores)
 	if err != nil {
 		return nil, fmt.Errorf("eval: read scores: %w", err)
 	}
-	bases, err := rubric.ParseScores(data)
+	f, err := scores.Parse(data)
 	if err != nil {
 		return nil, fmt.Errorf("eval: %w", err)
 	}
-	return bases, nil
+	return f, nil
 }
 
 func (cfg *Config) printTable(evals []*rubric.Evaluation) {

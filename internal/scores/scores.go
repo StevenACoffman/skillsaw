@@ -1,0 +1,250 @@
+// Package scores reads the judge-supplied dimension bases that turn skillsaw's
+// deterministic floor into the full rubric total.
+//
+// A base is a number a reader assigned after reading a particular version of a skill.
+// Nothing about it survives an edit, so an entry records the content hash it was judged
+// against and is only applied to a skill that still hashes to it. Without that binding a
+// file judged before an edit produces a full total for the text after it, silently --
+// and in the optimize loop that total is what the keep-or-revert gate compares.
+//
+// Parsing and lookup are pure; the caller reads the file.
+package scores
+
+import (
+	"encoding/json"
+	"fmt"
+	"math"
+	"strconv"
+)
+
+// MinBase and MaxBase bound a judged dimension base.
+const (
+	MinBase = 1
+	MaxBase = 10
+)
+
+// MaxDimension is the highest rubric dimension a base may name.
+const MaxDimension = 9
+
+// Aggregate summarises a set of per-case soft scores as one dimension base.
+type Aggregate struct {
+	Cases    int     // how many cases went into it
+	MeanSoft float64 // the mean of their soft scores, in [0,1]
+	Base     int     // that mean on the rubric's MinBase..MaxBase scale
+}
+
+// Entry is one skill version's bases: the numbers a reader assigned, and the content
+// they were assigned to.
+type Entry struct {
+	Skill string      `json:"skill,omitempty"` // a label for reports; the hash is the key
+	Hash  string      `json:"hash"`
+	Bases map[int]int `json:"bases"`
+}
+
+// File is a parsed scores document.
+type File struct {
+	// Entries is empty for the legacy shape, which carries no hash.
+	Entries []Entry
+
+	// Unbound holds the bases of a legacy document: a bare dimension-to-base object
+	// with nothing recording which text it describes. It applies to whatever skill it
+	// is handed, because there is no way to tell whether it belongs to that one.
+	Unbound map[int]int
+}
+
+// Parse reads either shape of scores document.
+//
+// The legacy shape is a bare object of dimension bases, `{"1": 8, "2": 7}`, which is what
+// skillsaw-skill's Phase 1 writes today. The current shape wraps entries that each name
+// the hash they were judged against. They are told apart by the presence of "entries",
+// the same way testprompts distinguishes its accepted shapes.
+//
+// A key that is not a dimension number, or a base outside MinBase..MaxBase, is an error
+// rather than a silent default: a partially understood scores file yields a total that
+// looks comparable to a correct one.
+//
+// Ensures: exactly one of Entries and Unbound is populated; it is pure.
+func Parse(data []byte) (*File, error) {
+	var probe struct {
+		Entries []json.RawMessage `json:"entries"`
+	}
+	if err := json.Unmarshal(data, &probe); err != nil {
+		return nil, fmt.Errorf("parse scores: %w", err)
+	}
+	if probe.Entries == nil {
+		bases, err := parseBases(data)
+		if err != nil {
+			return nil, err
+		}
+		return &File{Unbound: bases}, nil
+	}
+	return parseEntries(probe.Entries)
+}
+
+// Marshal renders entries as the hash-bound document Parse reads.
+//
+// The writer lives beside the reader so the shape has one definition. A caller that
+// assembled this JSON itself would be the second, and the two would drift the first time
+// either changed -- the defect File.Rewrites exists to catch on the way in.
+//
+// Bases are validated here rather than by the caller: an out-of-range base must be
+// unwritable, not merely rejected later by whatever reads the file back.
+//
+// Ensures: Parse(Marshal(e)) yields e; it is pure.
+func Marshal(entries []Entry) ([]byte, error) {
+	for i := range entries {
+		if entries[i].Hash == "" {
+			return nil, fmt.Errorf(
+				"marshal scores: entry %d has no hash; an entry that names no version "+
+					"cannot be checked against one", i+1)
+		}
+		for dim, base := range entries[i].Bases {
+			if dim < 1 || dim > MaxDimension {
+				return nil, fmt.Errorf(
+					"marshal scores: entry %d: invalid dimension %d (want 1..%d)",
+					i+1,
+					dim,
+					MaxDimension,
+				)
+			}
+			if base < MinBase || base > MaxBase {
+				return nil, fmt.Errorf(
+					"marshal scores: entry %d: dimension %d base %d out of range %d..%d",
+					i+1,
+					dim,
+					base,
+					MinBase,
+					MaxBase,
+				)
+			}
+		}
+	}
+	b, err := json.MarshalIndent(struct {
+		Entries []Entry `json:"entries"`
+	}{Entries: entries}, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("marshal scores: %w", err)
+	}
+	return append(b, '\n'), nil
+}
+
+// Bases returns the bases judged against hash.
+//
+// stale reports the case that must not pass silently: this skill was judged, but at some
+// other version. It is a different answer from never having been judged -- one means
+// "re-judge it", the other means "judge it" -- and a caller that could not tell them
+// apart would see an unexplained missing total in both.
+//
+// Ensures: bases is nil when stale is true; it is pure.
+func (f *File) Bases(skill, hash string) (bases map[int]int, stale bool) {
+	if len(f.Unbound) > 0 {
+		return f.Unbound, false
+	}
+	for i := range f.Entries {
+		if f.Entries[i].Hash == hash {
+			return f.Entries[i].Bases, false
+		}
+	}
+	for i := range f.Entries {
+		if f.Entries[i].Skill != "" && f.Entries[i].Skill == skill {
+			return nil, true
+		}
+	}
+	return nil, false
+}
+
+// JudgedAt returns the hash this skill was last judged against, for a message that can
+// name both versions. It is only meaningful when Bases reported stale.
+func (f *File) JudgedAt(skill string) string {
+	for i := range f.Entries {
+		if f.Entries[i].Skill == skill {
+			return f.Entries[i].Hash
+		}
+	}
+	return ""
+}
+
+// parseEntries decodes the hash-bound shape.
+func parseEntries(raw []json.RawMessage) (*File, error) {
+	entries := make([]Entry, 0, len(raw))
+	for i, r := range raw {
+		var e struct {
+			Skill string          `json:"skill"`
+			Hash  string          `json:"hash"`
+			Bases json.RawMessage `json:"bases"`
+		}
+		if err := json.Unmarshal(r, &e); err != nil {
+			return nil, fmt.Errorf("parse scores: entry %d: %w", i+1, err)
+		}
+		if e.Hash == "" {
+			return nil, fmt.Errorf(
+				"parse scores: entry %d has no hash; an entry that names no version "+
+					"cannot be checked against one", i+1)
+		}
+		bases, err := parseBases(e.Bases)
+		if err != nil {
+			return nil, fmt.Errorf("entry %d: %w", i+1, err)
+		}
+		entries = append(entries, Entry{Skill: e.Skill, Hash: e.Hash, Bases: bases})
+	}
+	return &File{Entries: entries}, nil
+}
+
+// parseBases decodes and validates a dimension-to-base object.
+func parseBases(data []byte) (map[int]int, error) {
+	var raw map[string]int
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("parse scores: %w", err)
+	}
+	out := make(map[int]int, len(raw))
+	for k, v := range raw {
+		n, err := strconv.Atoi(k)
+		if err != nil || n < 1 || n > MaxDimension {
+			return nil, fmt.Errorf(
+				"parse scores: invalid dimension key %q (want \"1\"..\"%d\")", k, MaxDimension)
+		}
+		if v < MinBase || v > MaxBase {
+			return nil, fmt.Errorf("parse scores: dimension %d base %d out of range %d..%d",
+				n, v, MinBase, MaxBase)
+		}
+		out[n] = v
+	}
+	return out, nil
+}
+
+// Aggregated turns per-case soft scores into a dimension base: the mean, placed on the
+// rubric's 1-10 scale.
+//
+// This is the arithmetic an optimize loop otherwise does by hand for dim 8, where the
+// result reaches the keep/revert gate with nothing checking it.
+//
+// A mean of zero maps to MinBase, not to 0. Ten times a zero mean rounds to 0, but 0 is
+// not a point on the rubric scale and Parse rejects it — failing every check *is* the
+// floor, and 0 is an artefact of the formula rather than a score. That clamp is
+// legitimate where internal/calibrate's refusal to clamp was not: there, moving an
+// out-of-range value would invent a judgment nobody made; here the judgment is "it failed
+// everything", and the floor is what the scale calls that.
+//
+// Requires: len(softs) > 0 — with no cases there is no base to report, and a caller must
+//
+//	refuse before asking rather than be handed a fabricated one.
+//
+// Ensures: Base is in [MinBase, MaxBase]; it is pure.
+func Aggregated(softs []float64) Aggregate {
+	if len(softs) == 0 {
+		return Aggregate{}
+	}
+	var sum float64
+	for _, s := range softs {
+		sum += s
+	}
+	mean := sum / float64(len(softs))
+	base := int(math.Round(mean * float64(MaxBase)))
+	if base < MinBase {
+		base = MinBase
+	}
+	if base > MaxBase {
+		base = MaxBase
+	}
+	return Aggregate{Cases: len(softs), MeanSoft: mean, Base: base}
+}
