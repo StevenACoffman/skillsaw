@@ -84,6 +84,13 @@ func TestEvaluateDimensions(t *testing.T) {
 			dimNum: 1, wantPenalty: 2, wantFlagPart: "kebab",
 		},
 		{
+			// A quoted scalar followed by unquoted text — the shape that appears in
+			// real book frontmatter. Nothing can be read out of the block.
+			name: "dim1 frontmatter did not parse", skillName: "ok-skill",
+			desc:   `"Site Reliability Engineering" by Betsy Beyer`,
+			dimNum: 1, wantPenalty: 6, wantFlagPart: "did not parse",
+		},
+		{
 			name: "dim1 description over 1024", skillName: "ok-skill", desc: longDesc,
 			dimNum: 1, wantPenalty: 2, wantFlagPart: "over 1024",
 		},
@@ -497,5 +504,48 @@ func TestEvaluateWithBases(t *testing.T) {
 	partial := map[int]int{1: 9, 2: 8, 3: 7, 5: 8, 7: 9}
 	if rubric.EvaluateWithBases(s, cfg, partial).HasFullScore {
 		t.Error("expected no full score when a judge dim base is missing")
+	}
+}
+
+// TestFrontmatterParseFailureReplacesTheSymptoms pins the reason for the guard: an
+// unparsed block must be reported as itself, not as the two missing fields it causes.
+// skillsaw's own preflight already names the YAML position; eval disagreeing with it on
+// the same file is the defect this closes.
+func TestFrontmatterParseFailureReplacesTheSymptoms(t *testing.T) {
+	t.Parallel()
+	cfg := rubric.DefaultConfig()
+	s := mkSkill(t, "ok-skill", `"Site Reliability Engineering" by Betsy Beyer`, "# Body\n", nil)
+	d := dim(rubric.Evaluate(s, cfg), 1)
+
+	if !hasFlag(d.Flags, "did not parse") {
+		t.Fatalf("expected the parse failure to be named, got %v", d.Flags)
+	}
+	for _, symptom := range []string{"missing name", "missing description"} {
+		if hasFlag(d.Flags, symptom) {
+			t.Errorf("must not report %q as a separate defect; got %v", symptom, d.Flags)
+		}
+	}
+	// The penalty equals what the two symptom flags summed to, so the diagnosis
+	// changed and no score moved — results.tsv compares totals across runs.
+	if d.Penalty != 6 {
+		t.Errorf("Penalty = %d, want 6 (unchanged from the flags it replaces)", d.Penalty)
+	}
+}
+
+// TestEmptyFrontmatterFieldsStillReported is the over-suppression guard. A skill with an
+// empty name and description parses fine (yaml.Unmarshal of an empty value succeeds), so
+// an author who really did omit them must still be told. Keying the guard on the wrong
+// condition would trade a false message for a missing one.
+func TestEmptyFrontmatterFieldsStillReported(t *testing.T) {
+	t.Parallel()
+	s := mkSkill(t, "", "", "# Body\n", nil)
+	if s.FrontmatterErr != nil {
+		t.Fatalf("empty fields must still parse; got %v", s.FrontmatterErr)
+	}
+	d := dim(rubric.Evaluate(s, rubric.DefaultConfig()), 1)
+	for _, want := range []string{"missing name", "missing description"} {
+		if !hasFlag(d.Flags, want) {
+			t.Errorf("expected %q to still be reported; got %v", want, d.Flags)
+		}
 	}
 }

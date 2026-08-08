@@ -250,6 +250,21 @@ func applyChecks(num int, s *skill.Skill, doc *markdown.Doc, cfg *Config, ds *Di
 }
 
 func checkFrontmatter(s *skill.Skill, cfg *Config, ds *DimScore) {
+	// A block that did not parse leaves every field below zero, so scoring them
+	// reports "missing name" and "missing description" for prose the author wrote and
+	// the parser could not reach. Unlike the guards in exegesis's lint and skillet's
+	// redlines — which spare only the checks that read parsed fields — every check in
+	// this function reads one, so there is nothing left to say honestly.
+	//
+	// The penalty is exactly what the two flags it replaces summed to, so this changes
+	// the diagnosis without moving any score; results.tsv compares totals across runs.
+	// Whether an unparseable block deserves a harsher penalty is a scoring question,
+	// filed separately rather than smuggled in with a message fix.
+	if s.FrontmatterErr != nil {
+		ds.Penalty += 6
+		ds.Flags = append(ds.Flags, "frontmatter did not parse")
+		return
+	}
 	switch {
 	case strings.TrimSpace(s.Name) == "":
 		ds.Penalty += 3
