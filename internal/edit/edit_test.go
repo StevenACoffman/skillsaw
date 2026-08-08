@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/StevenACoffman/skillet/finding"
 	"github.com/StevenACoffman/skillet/skill"
 	"github.com/StevenACoffman/skillsaw/internal/edit"
 )
@@ -165,4 +166,66 @@ func TestStructuralDefectsRedlinesAreOptIn(t *testing.T) {
 	if got := edit.StructuralDefects(notRIA, true); len(got) == 0 {
 		t.Error("with --redlines the missing RIA segments must be reported")
 	}
+}
+
+func TestAgainstOriginal(t *testing.T) {
+	t.Parallel()
+	const orig = "0123456789" // 10 bytes
+	cases := map[string]struct {
+		edited  string
+		growth  float64
+		wantSub string // "" means the edit is acceptable
+	}{
+		"a real edit within budget": {edited: "0123456789abc", growth: 1.5},
+		"exactly at the ceiling":    {edited: "012345678901234", growth: 1.5}, // 15 == 10*1.5
+		"an edit that changed nothing": {
+			edited: orig, growth: 1.5, wantSub: "changed nothing",
+		},
+		"past the ceiling": {
+			edited: "0123456789abcdef", growth: 1.5, wantSub: "past the",
+		},
+		// Both at once: shrinking to nothing is not a no-op, so only one fires.
+		"emptied": {edited: "", growth: 1.5},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			got := edit.AgainstOriginal(orig, tc.edited, tc.growth)
+			if tc.wantSub == "" {
+				if len(got) != 0 {
+					t.Errorf("an acceptable edit was rejected: %+v", got)
+				}
+				return
+			}
+			if len(got) == 0 {
+				t.Fatalf("no defect reported for %q", tc.edited)
+			}
+			if joined := messages(got); !strings.Contains(joined, tc.wantSub) {
+				t.Errorf("defects %q do not mention %q", joined, tc.wantSub)
+			}
+		})
+	}
+}
+
+func TestAgainstOriginalReportsBothDefectsTogether(t *testing.T) {
+	t.Parallel()
+	// A no-op cannot also be oversized, so the two never co-occur for a real edit --
+	// but the function must not stop at the first, or a caller fixing one would then
+	// discover the other on the next round instead of both now.
+	got := edit.AgainstOriginal("abc", "abc", 1.5)
+	if len(got) != 1 {
+		t.Fatalf("want exactly the no-op defect, got %+v", got)
+	}
+	if edit.DefaultMaxGrowth != 1.5 {
+		t.Errorf("DefaultMaxGrowth = %v, want darwin's 1.5", edit.DefaultMaxGrowth)
+	}
+}
+
+// messages joins a defect list's text for substring assertions.
+func messages(ds []finding.Diagnostic) string {
+	out := make([]string, 0, len(ds))
+	for _, d := range ds {
+		out = append(out, d.Message)
+	}
+	return strings.Join(out, "\n")
 }

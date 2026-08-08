@@ -6,12 +6,19 @@
 package edit
 
 import (
+	"fmt"
+
 	"github.com/StevenACoffman/skillet/finding"
 	"github.com/StevenACoffman/skillet/identity"
 	"github.com/StevenACoffman/skillet/redlines"
 	"github.com/StevenACoffman/skillet/skill"
 	"github.com/StevenACoffman/skillet/speclint"
 )
+
+// DefaultMaxGrowth is the size ceiling an edit may reach, as a multiple of the text it
+// replaced. Darwin's ratio: an edit that grows a skill by half again has stopped being an
+// edit and become a rewrite, whatever it scored.
+const DefaultMaxGrowth = 1.5
 
 // WithinSizeBudget reports whether an edited skill of newBytes stays within
 // ratio × origBytes (darwin's default ratio is 1.5). A non-positive origBytes
@@ -28,6 +35,42 @@ func WithinSizeBudget(origBytes, newBytes int, ratio float64) bool {
 // hash unchanged did nothing and need not be re-evaluated.
 func IsNoOp(before, after string) bool {
 	return identity.Hash(before) == identity.Hash(after)
+}
+
+// AgainstOriginal returns the defects an edit introduces relative to the text it
+// replaced: one that changed nothing, and one that outgrew the budget.
+//
+// It takes contents rather than parsed skills because both questions are about bytes. A
+// no-op edit and an oversized one are defects whether or not the result still parses, and
+// requiring a parse first would make a broken edit report the wrong complaint.
+//
+// These two checks live here, beside StructuralDefects, because a caller deciding whether
+// to adopt an edit wants one answer, not two lists to merge. They are separate functions
+// only because StructuralDefects judges a skill on its own and this judges a change.
+//
+// Ensures: the result is empty iff the edit changed something and stayed within
+//
+//	maxGrowth; it is pure.
+func AgainstOriginal(orig, edited string, maxGrowth float64) []finding.Diagnostic {
+	var ds []finding.Diagnostic
+	if IsNoOp(orig, edited) {
+		ds = append(ds, finding.Diagnostic{
+			Severity: finding.SeverityError,
+			Message:  "edit changed nothing: the content hash is unchanged",
+		})
+	}
+	if !WithinSizeBudget(len(orig), len(edited), maxGrowth) {
+		ds = append(ds, finding.Diagnostic{
+			Severity: finding.SeverityError,
+			Message: fmt.Sprintf(
+				"edit is %d bytes against the original's %d, past the %.2gx ceiling",
+				len(edited),
+				len(orig),
+				maxGrowth,
+			),
+		})
+	}
+	return ds
 }
 
 // StructuralDefects returns the defects that must block adopting s as an edit,

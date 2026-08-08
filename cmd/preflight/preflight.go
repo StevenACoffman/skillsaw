@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/peterbourgon/ff/v4"
@@ -23,10 +24,12 @@ import (
 // Config holds the preflight command configuration.
 type Config struct {
 	*root.Config
-	JSON     bool
-	Redlines bool
-	Flags    *ff.FlagSet
-	Command  *ff.Command
+	JSON      bool
+	Redlines  bool
+	Against   string
+	MaxGrowth float64
+	Flags     *ff.FlagSet
+	Command   *ff.Command
 }
 
 // skillDefects is one skill's structural verdict, for reporting.
@@ -43,9 +46,13 @@ func New(parent *root.Config) *Config {
 	cfg.Flags.BoolVar(&cfg.JSON, 0, "json", "emit the defects as JSON")
 	cfg.Flags.BoolVar(&cfg.Redlines, 0, "redlines",
 		"also enforce book2skill's Quality Red Lines (RIA-TV++ segments, quote limit, trigger)")
+	cfg.Flags.StringVar(&cfg.Against, 0, "against", "",
+		"the pre-edit SKILL.md to judge the edit against (one SKILL_DIR only)")
+	cfg.Flags.Float64Var(&cfg.MaxGrowth, 0, "max-growth", edit.DefaultMaxGrowth,
+		"size ceiling with --against, as a multiple of the original")
 	cfg.Command = &ff.Command{
 		Name:      "preflight",
-		Usage:     "skillsaw preflight [--redlines] [--json] SKILL_DIR ...",
+		Usage:     "skillsaw preflight [--redlines] [--against ORIG] [--json] SKILL_DIR ...",
 		ShortHelp: "structural gate: reject an edit that breaks structure, whatever it scored",
 		LongHelp: `Check each SKILL_DIR against the structural rules an edit must satisfy
 before it is adopted. Exit code is 1 when any defect is found, so an optimize
@@ -65,6 +72,16 @@ on score; this decides on structure, and it is deliberately the stricter of the
 two: "skillsaw eval" only *penalises* a blown description cap, so a gain
 elsewhere can outweigh it, whereas an edit that fails here is rejected outright.
 
+With --against, the edit is also judged against the text it replaced: an edit that
+left the content hash unchanged did nothing, and one that grew past --max-growth
+(default 1.5, darwin's ratio) has stopped being an edit and become a rewrite. Both
+were previously left to the caller as shell arithmetic that only printed a warning;
+here they fail the command like every other defect.
+
+--against takes exactly one SKILL_DIR. One original cannot describe several edits,
+and comparing every directory to one file would report defects that are arithmetic
+accidents rather than real ones.
+
 Runtime neutrality is not checked here — "skillsaw scan" gates that separately.`,
 		Flags: cfg.Flags,
 		Exec:  cfg.exec,
@@ -83,6 +100,14 @@ func (cfg *Config) exec(_ context.Context, args []string) error {
 	if len(args) == 0 {
 		return errors.New("preflight: pass at least one SKILL_DIR")
 	}
+	if cfg.Against != "" && len(args) != 1 {
+		return errors.New(
+			"preflight: --against compares one edit to one original; pass a single SKILL_DIR")
+	}
+	original, err := cfg.loadOriginal()
+	if err != nil {
+		return err
+	}
 
 	results := make([]skillDefects, 0, len(args))
 	total := 0
@@ -92,6 +117,9 @@ func (cfg *Config) exec(_ context.Context, args []string) error {
 			return fmt.Errorf("preflight: %w", err)
 		}
 		defects := edit.StructuralDefects(s, cfg.Redlines)
+		if cfg.Against != "" {
+			defects = append(defects, edit.AgainstOriginal(original, s.Raw, cfg.MaxGrowth)...)
+		}
 		total += len(defects)
 		results = append(results, skillDefects{Skill: filepath.Base(dir), Defects: defects})
 	}
@@ -103,6 +131,18 @@ func (cfg *Config) exec(_ context.Context, args []string) error {
 		return root.ExitError(1)
 	}
 	return nil
+}
+
+// loadOriginal reads the pre-edit text, or returns "" when --against was not given.
+func (cfg *Config) loadOriginal() (string, error) {
+	if cfg.Against == "" {
+		return "", nil
+	}
+	b, err := os.ReadFile(cfg.Against)
+	if err != nil {
+		return "", fmt.Errorf("preflight: read original %s: %w", cfg.Against, err)
+	}
+	return string(b), nil
 }
 
 // emit writes the verdicts as JSON (--json) or human-readable text.
