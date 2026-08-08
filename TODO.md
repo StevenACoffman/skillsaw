@@ -195,8 +195,10 @@ Source: `~/Documents/agent-orange/gemini_skills/processing/gap_analysis.md`.
       four, two of which were consequences of the one syntax error. The residual noted here
       earlier — exegesis's own name/folder check firing on a name it could not read — closed
       in exegesis#13.
-- [ ] **Consume `skills-manifest.json`: a hash-keyed skip list for the *agent's* judge
-      pass (not an `--incremental` flag on the deterministic CLI).**
+- [x] **Consume `skills-manifest.json`: a hash-keyed skip list for the *agent's* judge
+      pass (not an `--incremental` flag on the deterministic CLI).** DONE (2026-08-08) —
+      all three sub-items below are complete. What remains is wiring `verified` and
+      `changed` into `skillsaw-skill`, tracked in that skill's own TODO.
       **Correction to the premise:** the analysis attributes "up to 90% in LLM API costs"
       to skipping `skillsaw`'s own auditing. skillsaw never calls a model — that is a
       standing design contract (see "Deliberately NOT absorbed" above). `eval`, `scan`, and
@@ -239,8 +241,38 @@ Source: `~/Documents/agent-orange/gemini_skills/processing/gap_analysis.md`.
          `exegesis verify`: untouched reports 0 to reprocess / 233 unchanged; after one
          edit, one deletion and one addition it names exactly those two as stale with 1
          removed; and absolute and relative `--tree` spellings agree.
-      2. a hash-keyed `scores.json` cache so a `--scores` file records which hash it was
-         judged against, and a stale entry is an error rather than a silent reuse;
+      2. ~~a hash-keyed `scores.json` cache~~ **DONE (2026-08-08): `internal/scores` +
+         `eval --scores` accepts a hash-bound shape.** A base is a number someone assigned
+         after reading a particular version of a skill, and nothing about it survives an
+         edit; each entry now names the content hash it was judged against and is only
+         applied to a skill that still hashes to it.
+         **The failure was live, not hypothetical.** Demonstrated against the released
+         binary: judge a real skill, edit it, re-run `eval --scores` with the same file --
+         the old binary silently reports the same FULL 78.0/100 for the changed text. In
+         the optimize loop that total is `NEW` at STEP 5 and the input to `gate` at STEP 6,
+         so a wrong number decides keep-or-revert and is logged to `results.tsv` as
+         comparable. The documented loop avoids it by re-judging into `newscores.json`, but
+         nothing enforced that, and a deterministic gate should not rely on care.
+         **A second defect found while reading `eval`:** one `bases` map was applied to
+         every directory in the run, so `--all --scores` gave all 233 skills one skill's
+         judge bases and called every FULL total comparable. Bases are now matched per
+         skill; verified with two skills judged 10s and 2s, which the old binary scored
+         identically at 91.6 and the new one scores 91.6 and 22.8.
+         A skill judged at another version is **reported and not scored**, after the rest
+         of the run is scored -- with `--all` one stale entry must not hide the other
+         verdicts, but a total built on stale bases is not comparable to the ones beside
+         it, so the run still exits non-zero. "Judged at another version" is kept distinct
+         from "never judged": both yield no total, but one means re-judge and the other
+         means judge.
+         **The legacy flat shape still works**, byte-identical against the released binary
+         on a real skill (FULL 78.0/100 both ways). It records no version so it cannot be
+         checked against one -- unverifiable rather than stale.
+         `rubric.ParseScores` moved to `internal/scores`: the dimension-key and 1-10
+         validation belongs with the format that carries those numbers, and `rubric` has
+         no business owning a file layout.
+         **Follow-up, in another repo:** `skillsaw-skill` Phase 1 step 4 still writes the
+         flat shape. It should write the hash-bound one -- otherwise the protection is
+         available but unused by the loop that needs it most.
       3. ~~gate on `structure_verified`~~ **DONE (2026-08-07): `skillsaw verified
          MANIFEST`**, exit 0 only when the manifest says the structure passed. A separate
          command, not a flag on `changed`, because the TODO is right that it is
@@ -255,7 +287,158 @@ Source: `~/Documents/agent-orange/gemini_skills/processing/gap_analysis.md`.
          structural defects in a tree that was never examined.
       (3) is a free correctness win independent of the caching. Drop the "90%" figure; the
       real saving is "one judge pass per *changed* skill per campaign", unmeasured.
-- [ ] **Serialize derived checks back to `test-prompts.json` — but as a `tests` command,
+
+## Deterministic work still left to the agent (survey 2026-08-08)
+
+Extracted every shell line `skillsaw-skill` tells the agent to run that is *not* a
+`skillsaw` call. What follows is the deterministic remainder — arithmetic, formatting and
+file construction the CLI could own. Designing test prompts, scoring the judge-only
+dimensions, proposing the edit and running the skill stay with the agent; those have no
+deterministic form, and skillsaw not calling a model is a standing contract.
+
+None of these need a skillet change. Where one would have, skillet already has it.
+
+- [x] **`skillsaw log` — write a results.tsv row.** DONE (2026-08-08). The skill hand-builds **two** different
+      nine-field tab-separated `printf`s (baseline, and per-round at STEP 6). Column-order
+      drift between those and `auditlog.Columns()` is silent — nothing would catch it.
+      **`skillet/auditlog` already has the writer**: `Append(w, rows...)`, `Row` with all
+      nine fields, and `Columns()` for the header. It has sat unused since it was written;
+      only `history` (the reader) is exposed. This is the best ratio of the survey — a
+      command over code that already exists and is tested, reusing the exact `Row` type
+      `history` reads back.
+      **Outcome.** All three were exposure rather than construction, as the survey said:
+      `auditlog.Append` and `edit.{IsNoOp,WithinSizeBudget}` existed, were tested, and had
+      zero production callers. What landed is one command, one flag pair, and one doc change.
+      `skillsaw log` writes the header from `auditlog.Columns()` when the file is new, so the
+      skill's hand-written header line is gone too — that was the one place the column order
+      was spelled out a second time. Status validation stays in `auditlog.Append` ("validate
+      on write"); the command does not re-check it.
+      `preflight --against` composes the two existing helpers through a new pure
+      `edit.AgainstOriginal(orig, edited, maxGrowth)`, and requires exactly one SKILL_DIR --
+      one original cannot describe several edits. `--max-growth` defaults to darwin's 1.5.
+      The guards now **fail the command**; in the skill they only ever `echo`ed.
+      Verified by running the resulting snippets verbatim, including the case that would have
+      poisoned the gate: bases missing a `needs_judge` dim make `full_score` absent, so a bare
+      `jq -r` yields `null`. The documented form guards on `has_full_score` and fails with a
+      message. A row written by `log` reads back through `history` unchanged.
+
+      **Outcome.** `scores.Aggregated(softs)` owns the arithmetic — `internal/scores`
+      already knows what a base is (`MinBase`/`MaxBase`), so putting it there keeps the
+      1-10 scale in one package. A zero mean clamps to `MinBase`: `10 × 0` rounds to 0,
+      which is not a point on the scale, and failing every check genuinely *is* the floor.
+      That clamp is legitimate where `internal/calibrate`'s refusal to clamp was not —
+      there it would invent a judgment nobody made.
+      Only `Behavioral()` cases are scored. The skill said "mean soft over all prompts";
+      a `should_not_trigger` decoy has no good output to score, so counting it would lower
+      the base for a skill correctly declining to fire. That is a correction to the skill's
+      wording, not just an implementation choice.
+      `--all` **reports rather than gates** — exits 0 even when cases fail, because most
+      skills fail some checks and that is exactly why the base is below 10. Single-case
+      `judge` keeps its `hard == 0 → exit 1` contract.
+      **Real data changed the error handling.** Measured across the corpus: **0 of 183**
+      skills carry embedded checks on every behavioral case, and the sampled skill yielded
+      no derivable checks either — 0 of 4 scorable. Failing at the first case read as a
+      per-case slip when the file as a whole specifies nothing to check, so every
+      unscorable case is now named and the error counts them ("4 of 4 … add checks to
+      those cases first"). A *partially* scorable file is refused too: a base averaged over
+      an unstated subset is not comparable to one averaged over every case, and
+      comparability is the point of the total it feeds.
+      **`judge --all` is therefore unusable on the corpus as it stands** — which is the
+      open "serialize derived checks back to test-prompts.json" item, now with a measured
+      cost attached rather than a hypothesis.
+      `calibrate` tells the two shapes apart by probing for the `judgments` key, the way
+      `manifest.Parse` probes for `tool`. Trying the wrapper first cannot work: a
+      single-line JSONL file is itself valid JSON and unmarshals into the wrapper with zero
+      judgments, so it would read as empty. A malformed line is an error naming its number,
+      never a skip — a dropped judgment skews the report toward whatever survived.
+
+- [x] **`skillsaw scores` — emit the hash-bound scores file.** DONE (2026-08-08). The skill hand-writes JSON in
+      a heredoc, extracts the hash with `awk` (`skillsaw hash` prints `<hash>  <path>`), and
+      must pick `$AFTER` over `$BEFORE` at STEP 5. Evidence it is error-prone: writing that
+      snippet on 2026-08-08 got it wrong twice — first embedding the path in the JSON, then
+      with a `for kv in $BASES` loop that does not word-split under zsh and silently emitted
+      a valid-but-wrong file. A `--skill DIR --dim 1=8 --dim 2=7 …` form captures the hash
+      itself and removes all three hazards.
+- [x] **`judge --all` — aggregate the dim-8 base.** DONE (2026-08-08). `judge` scores exactly one case
+      (`--id N`), so the skill has the agent loop over prompts and compute
+      `round(10 × mean(soft))` by hand. That number feeds `scores.json`, the FULL total and
+      therefore the keep/revert gate, and every step of the aggregation is arithmetic.
+      The agent still *produces* the outputs — that is execution, and irreducible — so the
+      shape is something like `--from-test-prompts tp.json --all --outputs DIR/`, one
+      output file per case id. Highest value of the survey, and the largest, because it
+      needs a calling convention for multiple outputs.
+      The `soft → 1-10 base` mapping stays here, not in `skillet/judge`: the rubric scale is
+      skillsaw's policy, not a property of scoring an output.
+- [x] **`preflight --against ORIGINAL` — fold in the F5 and F6 guards.** DONE (2026-08-08). STEP 4 does the
+      no-op check (`[ "$BEFORE" = "$AFTER" ]`) and the size check
+      (`[ "$new" -le $(( orig * 3 / 2 )) ]`) as bash arithmetic, and both only `echo` a
+      warning rather than failing. `preflight` is already the structural gate at that exact
+      point and already loads the skill; it just cannot see the original. Folding them in
+      makes them exit non-zero like the structural checks beside them.
+- [x] **`calibrate` should read JSONL directly.** DONE (2026-08-08). Phase 3 assembles the file with
+      `printf '{"judgments":[%s]}' "$(paste -sd, - < judgments.jsonl)"`. Pure plumbing.
+      Accepting the JSONL the loop already appends deletes the step rather than moving it.
+- [x] **A machine-readable score for the loop.** DONE (2026-08-08), doc-only as predicted. The skill says "compute BASE = the FULL
+      total, one decimal", i.e. scrape a table column for `BASE`/`OLD`/`NEW`.
+      **Checked 2026-08-08: no code needed.** `eval --json` already emits
+      `full_score` (and `has_full_score`, and `deterministic_score`) — the loop's most
+      important number is available structured and the skill simply does not use it. This
+      is a documentation change to `skillsaw-skill`, not a `--score-only` flag.
+- [x] **The root `LongHelp` carried a hand-written command list that had drifted.** DONE (2026-08-08).
+      `cmd/root/root.go` lists commands in its `LongHelp` *and* ff renders `SUBCOMMANDS`
+      from the ones actually registered, so there are two lists of the same thing and only
+      one of them can go stale. It has: the hand-written block is missing `preflight`,
+      `calibrate`, `verified` and `changed`.
+      The identical defect was removed from exegesis's root help (exegesis PR #16) by
+      deleting the hand-written list and pointing at SUBCOMMANDS — one list that cannot go
+      stale beats two that can. Same fix applies here; it is a deletion, not a rewrite.
+      Noticed while adding `verified` and `changed` (2026-08-08), which made it staler.
+      **Outcome.** `scores.Marshal` lives beside `Parse`, so the document has one
+      definition and the round trip is the test that keeps it that way. Validation is in
+      `Marshal`, not the command: an out-of-range base must be *unwritable*, not merely
+      rejected later by whatever reads it back. The hash comes from the skill rather than a
+      flag — accepting one would reintroduce the mistake the binding exists to catch.
+      **Three lines of the loop disappeared, not just changed.** With `scores` reading the
+      skill itself and `preflight --against` owning the no-op check, the `BEFORE`/`AFTER`
+      hash captures at STEP 2 and STEP 4 had no remaining reader; their comment still said
+      "needed by STEP 5", which was no longer true. Removed rather than left as
+      instructions nothing acts on.
+- [ ] **A report of which cases still lack `checks`, scoped to a directory.** Follows from
+      the 2026-08-08 decision to author checks corpus-wide *with a directory limit* (see
+      `skillsaw-skill/TODO.md`): the work is taken in parts, so "how much is left here"
+      has to be answerable without re-running the ad-hoc measurement that produced the
+      1275 figure.
+      Shape: walk a tree, load each `test-prompts.json`, and report per skill how many
+      behavioral cases carry no checks and none derivable — the same question `judge --all`
+      answers for one skill, asked across many. Something like
+      `skillsaw checks --tree DIR [--json]`, exiting non-zero while any remain so it can
+      gate a campaign the way `verified` does.
+      Count **behavioral** cases only (`Behavioral()`), not every case: a
+      `should_not_trigger` decoy needs no checks, and counting decoys would make the
+      remaining work look permanently unfinishable.
+      Cheap to build — `testprompts.Load`, `Behavioral()` and `ChecksFor` already do all
+      of it; this is a walk and a tally, with no new logic. Note it reports a *gap*, it does
+      not fill one: writing checks is authoring work no tool can derive (see the entry
+      below for the measurement behind that).
+- [ ] **MEASURED 2026-08-08: do not build this as written — it would write empty arrays.**
+      Over the real corpus, of **1275 behavioral cases in 183 skills**: 0 carry embedded
+      checks, `DeriveChecks` derives checks for **0**, and 1275 yield nothing at all. No
+      skill has a single fully scorable case. A `--write-checks` command would write
+      `"checks": []` 1275 times and change nothing.
+      **The reason is in the data, and it is not a bug in `DeriveChecks`.** `expected`
+      holds *activation* prose — "Invokes 10x9-cost-reliability, applies the 10x/9 rule: …",
+      and in two of six sampled skills literally `"trigger"` or `"invoke"`. `DeriveChecks`
+      only emits on an unambiguous signal (a heading name, a quoted phrase, a character
+      bound, a named tool); it is behaving as designed by finding nothing.
+      **These files were authored for activation testing, not behavioural scoring.** `type`
+      + `prompt` is what `skillsaw activation` consumes, and that is all they carry. Writing
+      checks is authoring work; no CLI can derive them from prose that does not state them.
+      This is why `judge --all` cannot compute a dim-8 base for any skill in the tree.
+      The exegesis-vs-skillsaw ownership question is moot for *derivation*. It returns only
+      if a command is wanted to persist checks an agent **authored** — a different item, and
+      one worth filing separately if that is the direction.
+      Original entry, kept for context:
+      **Serialize derived checks back to `test-prompts.json` — but as a `tests` command,
       not a `judge` flag.** Confirmed real: `judge --from-test-prompts` calls
       `testprompts.ChecksFor`, and when checks are derived it only prints a stderr note
       (`cmd/judge/judge.go:157-161`); the derived array never reaches disk, so nobody can
@@ -284,6 +467,52 @@ Source: `~/Documents/agent-orange/gemini_skills/processing/gap_analysis.md`.
       Cross-repo: derived checks are a producer concern as much as a consumer one — decide
       whether this lands here or as `exegesis tests --derive-checks` (see
       `../exegesis/TODO.md`); duplicating it in both is the outcome to avoid.
+
+## SkillLens dimensions: shared, not private (2026-08-08)
+
+Source: `~/Documents/agent-orange/skillopt_changes_findings.md`, a survey of what
+`microsoft/SkillOpt` and `microsoft/SkillLens` actually contribute to this family.
+
+**Correction to a premise worth recording, because the README could be misread as
+implying otherwise.** SkillOpt does **not** incorporate SkillLens — checked across the
+whole repo and all 462 commits, the only SkillLens presence there is two hyperlinks on
+its project page, and the four commits naming it are webpage restyling. The two
+frameworks were fused *here*, by this repo. The README's attribution (SkillLens = the
+3-dimension rubric, SkillOpt = the gate ratchet and rule-judge operators) is accurate and
+should stay; what is worth adding is that skillsaw is the only place that fusion exists.
+
+- [ ] **Move dims 3/5/9's detectors to `skillet/skilllens` and delete the private copies.**
+      `internal/rubric` owns the `failureEN`/`failureCN` regexes and the `FailureSections`,
+      `Softening` and `BlacklistHeadings` vocabularies. Nothing about them is
+      skillsaw-specific — they are a mechanization of SkillLens's three tests and its
+      "generic process advice" anti-pattern — but `internal/` makes them unreachable, so
+      **adh reimplemented all three** (`failure-handling`, `actionable-specificity`,
+      `boundary-section`, 60 of its 100 points). Two tools can now disagree about whether a
+      skill encodes a failure mode, which is the drift `speclint` and `redlines` were
+      promoted to end. skillet's TODO carries the shape; the second consumer already exists,
+      so this is not speculative promotion.
+      **The weights and the 1-10 mapping stay here.** Same boundary already drawn twice:
+      `speclint` owns the description cap, skillsaw owns what a blown cap costs. adh weights
+      the same three dimensions at 60 and skillsaw at 35, legitimately — they grade different
+      artifacts.
+      Once landed, `Config`'s four SkillLens-derived lists come from skillet and the
+      remaining `DefaultConfig` fields (`FillerTails`, `Slop`, `CheckpointMarkers`) stay
+      local, since dims 1/4/7 have no second consumer.
+- [ ] **Cite the dimensions' provenance where a reader will hit it.** `rubric.go`'s package
+      doc calls the whole thing "the darwin 9-dimension rubric (spec §8)", and the
+      `Dimensions()` table gives no hint that three of the nine come from a different,
+      externally-validated source with published tests and anti-examples. The README says
+      so; the code does not. This matters for the judge tier: `skillsaw-skill` has the agent
+      hand-score dims 3 and 5, and those two have a stated definition it is not being given
+      (tracked in that skill's TODO).
+- Deliberately NOT adopted from SkillOpt: **`compute_semantic_density`**
+      (`skillopt/evaluation/gate.py`), the one genuinely new dimension on its validation
+      gate. It counts leading imperatives (`MUST`/`ALWAYS`/`NEVER`/…) and adds
+      `0.05 × density` to the gate score. Under a strict-`>` ratchet that rewards imperative
+      *tone* rather than content — an edit can win the gate by sprinkling `MUST` — which is
+      the "instruct, don't enforce" shape this repo rejects elsewhere. Note SkillOpt's own
+      vendored sleep gate (`skillopt_sleep/gate.py`) omits it too. Its provenance is
+      `49a5b61 fix(gate): resolve issue #100`, not SkillLens.
 
 ## Reasoning-toolkit survey (unified-thinking, 2026-08-05)
 
