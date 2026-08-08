@@ -17,6 +17,7 @@ import (
 	"github.com/peterbourgon/ff/v4/ffhelp"
 
 	"github.com/StevenACoffman/skillsaw/cmd/activation"
+	"github.com/StevenACoffman/skillsaw/cmd/calibrate"
 	"github.com/StevenACoffman/skillsaw/cmd/diagnose"
 	"github.com/StevenACoffman/skillsaw/cmd/eval"
 	"github.com/StevenACoffman/skillsaw/cmd/gate"
@@ -49,6 +50,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	history.New(r)
 	judge.New(r)
 	preflight.New(r)
+	calibrate.New(r)
 	// register new commands here
 
 	if err := r.Command.Parse(args, ff.WithEnvVarPrefix("SKILLSAW")); err != nil {
