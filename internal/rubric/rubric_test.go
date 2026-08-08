@@ -433,54 +433,6 @@ func TestDiagnose(t *testing.T) {
 	}
 }
 
-func TestParseScores(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name    string
-		in      string
-		wantErr bool
-		want    map[int]int
-	}{
-		{name: "valid subset", in: `{"2":8,"3":7}`, want: map[int]int{2: 8, 3: 7}},
-		{name: "empty object", in: `{}`, want: map[int]int{}},
-		{name: "unknown high key", in: `{"10":5}`, wantErr: true},
-		{name: "zero key", in: `{"0":5}`, wantErr: true},
-		{name: "non-numeric key", in: `{"foo":5}`, wantErr: true},
-		{name: "value too high", in: `{"2":11}`, wantErr: true},
-		{name: "value too low", in: `{"2":0}`, wantErr: true},
-		{name: "array not object", in: `[1,2,3]`, wantErr: true},
-		{name: "garbage", in: `not json`, wantErr: true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			got, err := rubric.ParseScores([]byte(tt.in))
-			if tt.wantErr {
-				if err == nil {
-					t.Fatalf("ParseScores(%s) = %v, want error", tt.in, got)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("ParseScores(%s) unexpected error: %v", tt.in, err)
-			}
-			assertScores(t, got, tt.want)
-		})
-	}
-}
-
-func assertScores(t *testing.T, got, want map[int]int) {
-	t.Helper()
-	if len(got) != len(want) {
-		t.Fatalf("got %v, want %v", got, want)
-	}
-	for k, v := range want {
-		if got[k] != v {
-			t.Errorf("key %d = %d, want %d", k, got[k], v)
-		}
-	}
-}
-
 func TestEvaluateWithBases(t *testing.T) {
 	t.Parallel()
 	cfg := rubric.DefaultConfig()

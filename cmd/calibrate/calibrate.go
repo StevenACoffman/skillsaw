@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/peterbourgon/ff/v4"
 
@@ -49,9 +50,10 @@ func New(parent *root.Config) *Config {
 		LongHelp: `Report how well stated confidences matched outcomes: Expected and Maximum
 Calibration Error, the Brier score, and the per-bin breakdown they derive from.
 
-The input is {"judgments":[{skill, dim, base, passed}]}, where base is the 1-10
-confidence the agent stated before an outcome was known and passed is what the
-outcome turned out to be.
+The input is either {"judgments":[{skill, dim, base, passed}]} or the same objects one
+per line (JSONL), which is what an optimize loop appends as it goes. base is the 1-10
+confidence the agent stated before an outcome was known; passed is what the outcome
+turned out to be.
 
 The intended source is the optimize loop's edit prediction: the agent states, when it
 proposes an edit targeting a dimension, how strongly it expects that edit to pass the
@@ -107,17 +109,55 @@ func (cfg *Config) exec(_ context.Context, args []string) error {
 	return cfg.emit(calibration.Compute(samples), len(judgments)-len(samples))
 }
 
-// load reads and parses the judgments file.
+// load reads and parses the judgments file, in either accepted shape.
+//
+// The optimize loop appends one judgment per line as it goes, so JSONL is what it
+// naturally has; the wrapped {"judgments":[...]} form is what it used to assemble with
+// paste before this read it directly.
+//
+// The shapes are told apart by probing for the "judgments" key, the way manifest.Parse
+// probes for "tool" -- not by trying the wrapper first. A single-line JSONL file is
+// itself valid JSON and unmarshals into the wrapper with zero judgments, so "did it
+// parse" cannot distinguish them and would read that file as empty.
 func load(path string) ([]calibrate.Judgment, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("calibrate: read judgments: %w", err)
 	}
-	var f file
-	if err := json.Unmarshal(data, &f); err != nil {
-		return nil, fmt.Errorf("calibrate: parse judgments %s: %w", path, err)
+	var probe map[string]json.RawMessage
+	if err := json.Unmarshal(data, &probe); err == nil {
+		if _, wrapped := probe["judgments"]; wrapped {
+			var f file
+			if err := json.Unmarshal(data, &f); err != nil {
+				return nil, fmt.Errorf("calibrate: parse judgments %s: %w", path, err)
+			}
+			return f.Judgments, nil
+		}
 	}
-	return f.Judgments, nil
+	return parseLines(path, data)
+}
+
+// parseLines reads the JSONL shape: one judgment per non-blank line.
+//
+// A malformed line is an error naming its number, never a skip. A silently dropped
+// judgment skews the report toward whatever survived, which is the one thing a
+// calibration report must not do.
+func parseLines(path string, data []byte) ([]calibrate.Judgment, error) {
+	var out []calibrate.Judgment
+	for i, line := range strings.Split(string(data), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		var j calibrate.Judgment
+		if err := json.Unmarshal([]byte(line), &j); err != nil {
+			return nil, fmt.Errorf("calibrate: parse %s line %d: %w", path, i+1, err)
+		}
+		out = append(out, j)
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("calibrate: %s holds no judgments", path)
+	}
+	return out, nil
 }
 
 // emit writes the report as JSON (--json) or human-readable text. dropped is the

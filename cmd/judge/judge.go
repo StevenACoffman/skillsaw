@@ -11,16 +11,18 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/peterbourgon/ff/v4"
 
 	judgelib "github.com/StevenACoffman/skillet/judge"
 	"github.com/StevenACoffman/skillet/testprompts"
 	"github.com/StevenACoffman/skillsaw/cmd/root"
+	"github.com/StevenACoffman/skillsaw/internal/scores"
 )
 
 const (
-	judgeUsage     = "skillsaw judge (--checks checks.json | --from-test-prompts tp.json --id N) [--output out.txt]"
+	judgeUsage     = "skillsaw judge (--checks c.json | --from-test-prompts tp.json (--id N | --all --outputs DIR)) [--output out.txt]"
 	judgeShortHelp = "score an output against deterministic rule checks"
 	judgeLongHelp  = `Score an output against a set of rule checks (darwin spec §8.5) — the
 deterministic first-line dim-8 mechanism, ported from SkillOpt-Sleep's judges.
@@ -45,8 +47,38 @@ Supported ops:
 
 The output under test is read from --output (default stdin). Reports hard
 (1.0 iff every check passes), soft (passed/total), and a per-check reason.
-Exit code is 1 when hard is 0, so a harness can branch on the verdict.`
+Exit code is 1 when hard is 0, so a harness can branch on the verdict.
+
+With --all, score every behavioral case in --from-test-prompts and report the
+dimension base their mean implies -- the arithmetic an optimize loop otherwise does
+by hand for dim 8, where the result reaches the keep/revert gate unchecked. Each
+case's output is read from DIR/out-<id>.txt under --outputs.
+
+Only should_trigger and edge_case cases are scored. A should_not_trigger decoy has
+no good output to score, so including it would drag the base down for a skill
+behaving correctly by declining to fire.
+
+A case with no output file is an error, not a skip: the base is a mean, and dropping
+a case silently changes the denominator.
+
+--all reports rather than gates, so it exits 0 even when cases fail their checks --
+most skills fail some, which is why the base is below 10. It exits non-zero only
+when something prevented scoring.`
 )
+
+// caseScore is one behavioral case's verdict, for reporting.
+type caseScore struct {
+	ID   int     `json:"id"`
+	Hard float64 `json:"hard"`
+	Soft float64 `json:"soft"`
+}
+
+// allReport is the --all document: every case's verdict and the base they imply.
+type allReport struct {
+	Cases    []caseScore `json:"cases"`
+	MeanSoft float64     `json:"mean_soft"`
+	Base     int         `json:"base"`
+}
 
 // Config holds the judge command configuration.
 type Config struct {
@@ -54,6 +86,8 @@ type Config struct {
 	Checks          string
 	FromTestPrompts string
 	ID              int
+	All             bool
+	Outputs         string
 	Output          string
 	JSON            bool
 	Flags           *ff.FlagSet
@@ -93,6 +127,10 @@ func New(parent *root.Config) *Config {
 		"-",
 		"path to the output under test (\"-\" = stdin)",
 	)
+	cfg.Flags.BoolVar(&cfg.All, 0, "all",
+		"score every behavioral case and report the dimension base their mean implies")
+	cfg.Flags.StringVar(&cfg.Outputs, 0, "outputs", "",
+		"directory holding out-<id>.txt per case, required with --all")
 	cfg.Flags.BoolVar(&cfg.JSON, 0, "json", "emit the result as JSON")
 	cfg.Command = &ff.Command{
 		Name:      "judge",
@@ -107,6 +145,9 @@ func New(parent *root.Config) *Config {
 }
 
 func (cfg *Config) exec(_ context.Context, _ []string) error {
+	if cfg.All {
+		return cfg.scoreAll()
+	}
 	checks, err := cfg.resolveChecks()
 	if err != nil {
 		return err
@@ -204,5 +245,98 @@ func (cfg *Config) emit(res judgelib.Result) error {
 	for _, w := range res.Why {
 		_, _ = fmt.Fprintf(cfg.Stdout, "  - %s\n", w)
 	}
+	return nil
+}
+
+// scoreAll scores every behavioral case and reports the base their mean implies.
+func (cfg *Config) scoreAll() error {
+	if cfg.FromTestPrompts == "" {
+		return errors.New("judge: --all needs --from-test-prompts; there is no per-case " +
+			"notion with a single --checks set")
+	}
+	if cfg.Outputs == "" {
+		return errors.New("judge: --all needs --outputs DIR holding out-<id>.txt per case")
+	}
+	f, err := testprompts.Load(cfg.FromTestPrompts)
+	if err != nil {
+		return fmt.Errorf("judge: %w", err)
+	}
+	// Behavioral, not every case: a should_not_trigger decoy has no good output to
+	// score, so counting it would lower the base for a skill correctly declining to fire.
+	behavioral := f.Behavioral()
+	if len(behavioral) == 0 {
+		return fmt.Errorf("judge: %s has no should_trigger or edge_case cases to score",
+			cfg.FromTestPrompts)
+	}
+	// Cases specifying nothing to check are collected and reported together rather than
+	// failing at the first one. Across the real corpus this is the common state, and a
+	// message about case 1 reads as a per-case slip when the file as a whole specifies
+	// no checks; naming all of them says what to fix.
+	var unscorable []int
+	for i := range behavioral {
+		if checks, _ := testprompts.ChecksFor(&behavioral[i]); len(checks) == 0 {
+			unscorable = append(unscorable, behavioral[i].ID)
+		}
+	}
+	if len(unscorable) > 0 {
+		for _, id := range unscorable {
+			_, _ = fmt.Fprintf(cfg.Stderr,
+				"judge: case %d has no checks and none derivable from its expected text\n", id)
+		}
+		// Not "score the rest": a base averaged over an unstated subset is not
+		// comparable to one averaged over every case, and comparability is the whole
+		// point of the total this feeds. Refuse rather than emit a lookalike.
+		return fmt.Errorf(
+			"judge: %d of %d behavioral case(s) in %s specify no checks, so no dim-8 base "+
+				"can be computed; add checks to those cases first",
+			len(unscorable), len(behavioral), cfg.FromTestPrompts)
+	}
+	rep := allReport{Cases: make([]caseScore, 0, len(behavioral))}
+	softs := make([]float64, 0, len(behavioral))
+	for i := range behavioral {
+		score, err := cfg.scoreCase(&behavioral[i])
+		if err != nil {
+			return err
+		}
+		rep.Cases = append(rep.Cases, score)
+		softs = append(softs, score.Soft)
+	}
+	agg := scores.Aggregated(softs)
+	rep.MeanSoft, rep.Base = agg.MeanSoft, agg.Base
+	return cfg.emitAll(&rep)
+}
+
+// scoreCase judges one case against its output file.
+func (cfg *Config) scoreCase(c *testprompts.Case) (caseScore, error) {
+	checks, _ := testprompts.ChecksFor(c)
+	path := filepath.Join(cfg.Outputs, fmt.Sprintf("out-%d.txt", c.ID))
+	data, err := os.ReadFile(path)
+	if err != nil {
+		// Not a skip: the base is a mean, so dropping a case silently changes the
+		// denominator and reports a number computed over fewer cases than it claims.
+		return caseScore{}, fmt.Errorf("judge: case %d: read %s: %w", c.ID, path, err)
+	}
+	res, err := judgelib.Score(string(data), checks)
+	if err != nil {
+		return caseScore{}, fmt.Errorf("judge: case %d: %w", c.ID, err)
+	}
+	return caseScore{ID: c.ID, Hard: res.Hard, Soft: res.Soft}, nil
+}
+
+// emitAll renders the aggregate as JSON (--json) or one line per case plus the base.
+func (cfg *Config) emitAll(rep *allReport) error {
+	if cfg.JSON {
+		enc := json.NewEncoder(cfg.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(rep); err != nil {
+			return fmt.Errorf("judge: encode json: %w", err)
+		}
+		return nil
+	}
+	for _, c := range rep.Cases {
+		_, _ = fmt.Fprintf(cfg.Stdout, "case %d: hard %.0f  soft %.2f\n", c.ID, c.Hard, c.Soft)
+	}
+	_, _ = fmt.Fprintf(cfg.Stdout, "%d case(s), mean soft %.3f, base %d\n",
+		len(rep.Cases), rep.MeanSoft, rep.Base)
 	return nil
 }

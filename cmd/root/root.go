@@ -57,20 +57,14 @@ func New(stdin io.Reader, stdout, stderr io.Writer) *Config {
 		Name:      "skillsaw",
 		Usage:     "skillsaw <SUBCOMMAND> ...",
 		ShortHelp: "deterministically score, diagnose, and validate Agent Skills",
+		// No hand-written command list here: ff renders SUBCOMMANDS from the registered
+		// commands, and the copy that used to sit in this text had already drifted -- it
+		// omitted preflight, calibrate, verified, changed, log and scores. One list that
+		// cannot go stale beats two that can. (Same fix as exegesis PR #16.)
 		LongHelp: `skillsaw is the deterministic core of the darwin-skill optimizer: it
 scores, diagnoses, and validates Agent Skills, reserving a model only for the
-irreducible judge-only rubric dimensions.
-
-Commands:
-  eval        score a skill against the 9-dimension rubric
-  diagnose    recommend the next dimension to improve
-  judge       score an output against behavioral checks (test-prompts or --checks)
-  activation  report trigger accuracy from type-tagged test-prompts
-  scan        runtime-neutrality red-light scan (CI gate)
-  gate        decide keep/revert for a candidate score (validation gate)
-  hash        print a skill's content identity hash
-  history     show the optimization log (results.tsv)
-  version     print version information`,
+irreducible judge-only rubric dimensions. See SUBCOMMANDS below, and
+"skillsaw <SUBCOMMAND> -h" for what each one does.`,
 	}
 	return &cfg
 }

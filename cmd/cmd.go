@@ -25,9 +25,11 @@ import (
 	"github.com/StevenACoffman/skillsaw/cmd/hash"
 	"github.com/StevenACoffman/skillsaw/cmd/history"
 	"github.com/StevenACoffman/skillsaw/cmd/judge"
+	skillsawlog "github.com/StevenACoffman/skillsaw/cmd/log"
 	"github.com/StevenACoffman/skillsaw/cmd/preflight"
 	"github.com/StevenACoffman/skillsaw/cmd/root"
 	"github.com/StevenACoffman/skillsaw/cmd/scan"
+	"github.com/StevenACoffman/skillsaw/cmd/scores"
 	"github.com/StevenACoffman/skillsaw/cmd/verified"
 	"github.com/StevenACoffman/skillsaw/cmd/version"
 )
@@ -55,6 +57,8 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	calibrate.New(r)
 	verified.New(r)
 	changed.New(r)
+	skillsawlog.New(r)
+	scores.New(r)
 	// register new commands here
 
 	if err := r.Command.Parse(args, ff.WithEnvVarPrefix("SKILLSAW")); err != nil {

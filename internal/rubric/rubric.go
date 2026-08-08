@@ -11,7 +11,6 @@
 package rubric
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -147,29 +146,6 @@ func Dimensions() []Dimension {
 // case; use EvaluateWithBases to fold in a model's per-dimension scores.
 func Evaluate(s *skill.Skill, cfg *Config) *Evaluation {
 	return EvaluateWithBases(s, cfg, nil)
-}
-
-// ParseScores parses an untrusted JSON object of judge-supplied dimension bases,
-// e.g. {"2": 8, "3": 7}. Keys must be dimension numbers "1".."9" and values must
-// be in 1..10; anything else is an error rather than a silent default (SkillOpt
-// extract_json: prefer an error over an ambiguous or partial object).
-func ParseScores(data []byte) (map[int]int, error) {
-	var raw map[string]int
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, fmt.Errorf("parse scores: %w", err)
-	}
-	out := make(map[int]int, len(raw))
-	for k, v := range raw {
-		n, err := strconv.Atoi(k)
-		if err != nil || n < 1 || n > len(Dimensions()) {
-			return nil, fmt.Errorf("parse scores: invalid dimension key %q (want \"1\"..\"9\")", k)
-		}
-		if v < 1 || v > 10 {
-			return nil, fmt.Errorf("parse scores: dimension %d base %d out of range 1..10", n, v)
-		}
-		out[n] = v
-	}
-	return out, nil
 }
 
 // EvaluateWithBases scores a skill deterministically and, when bases supply a
