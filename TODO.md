@@ -221,12 +221,38 @@ Source: `~/Documents/agent-orange/gemini_skills/processing/gap_analysis.md`.
          `--tree` spelling must not matter (`Diff` relativizes to each manifest's `Tree`,
          so don't re-derive paths around it). skillet deliberately does **not** ship the
          tree-scan helper — one consumer, held by promote-on-second-consumer — so the walk
-         lives here;
+         lives here. **DONE (2026-08-07): `skillsaw changed --manifest base.json
+         [--tree DIR] [--json]`.** No `internal/` package: the pure core is already
+         upstream (`Parse`/`Diff`/`Stale`), and a local one that only forwarded to it
+         would be a layer to see through. Scans into a `manifest.Manifest` struct literal
+         rather than `manifest.Build`, because `Build` also takes the emitting tool and
+         whether every gate passed and neither means anything for a freshly-walked tree.
+         A skill whose `SKILL.md` is present but unreadable is recorded with **no hash**
+         rather than skipped, so `Diff`'s unknown-hash rule lands it in the campaign;
+         skipping would drop it from the tree's inventory for good, and one bad skill must
+         not abort the walk. A *deleted* `SKILL.md` is a different case -- discovery does
+         not see the directory at all, so it is correctly reported as removed. Exits 0
+         whether or not anything is stale: it is a query, and `verified` is the gate.
+         `--all`/`--roots` deferred -- `Diff` needs one `Tree` to relativize against, and
+         location-keying already makes the multi-root case correct when it is added.
+         Verified on the real 233-skill tree against a manifest written by the released
+         `exegesis verify`: untouched reports 0 to reprocess / 233 unchanged; after one
+         edit, one deletion and one addition it names exactly those two as stale with 1
+         removed; and absolute and relative `--tree` spellings agree.
       2. a hash-keyed `scores.json` cache so a `--scores` file records which hash it was
          judged against, and a stale entry is an error rather than a silent reuse;
-      3. gate on `structure_verified` — refuse to optimize a tree exegesis marked
-         unverified. `manifest.Parse` now exposes the field, so this is a read and a
-         comparison.
+      3. ~~gate on `structure_verified`~~ **DONE (2026-08-07): `skillsaw verified
+         MANIFEST`**, exit 0 only when the manifest says the structure passed. A separate
+         command, not a flag on `changed`, because the TODO is right that it is
+         independent: an unverified tree is unfit to optimize whether or not anything in
+         it changed. skillsaw has no `optimize` subcommand to hang it on -- the loop lives
+         in `skillsaw-skill` -- so the skill calls it and checks the exit code.
+         It prints the tool, tree and skill count beside the verdict: a bare pass/fail
+         leaves the reader unable to tell whether they gated the manifest they meant.
+         A file that is not a manifest is an **error**, not a quiet "unverified" --
+         `manifest.Parse` already rejects a document with no `tool` field, and reporting a
+         zero-valued manifest as a failed gate would send the reader hunting for
+         structural defects in a tree that was never examined.
       (3) is a free correctness win independent of the caching. Drop the "90%" figure; the
       real saving is "one judge pass per *changed* skill per campaign", unmeasured.
 - [ ] **Serialize derived checks back to `test-prompts.json` — but as a `tests` command,
