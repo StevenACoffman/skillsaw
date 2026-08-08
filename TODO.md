@@ -29,10 +29,15 @@ so the two cannot drift by hand.
       the canonical `{tests}`, a bare array, and the legacy
       `{test_cases}`/`expected_behavior` shape (string ids fall back to position),
       and exposes `Behavioral()` / `Decoys()`.
-- [x] **S3 — Surface the activation signal.** DONE: `internal/activation` +
-      `skillsaw activation <skill-dir>` scores trigger vocabulary vs.
-      should_trigger/should_not_trigger prompts, with per-case explanations and an
-      optional `--min` CI gate. **Reported separately — NOT in the 9-dim total.**
+- [x] **S3 — Surface the activation signal.** DONE: `skillsaw activation <skill-dir>`
+      scores trigger vocabulary vs. should_trigger/should_not_trigger prompts, with
+      per-case explanations and an optional `--min` CI gate. **Reported separately — NOT
+      in the 9-dim total**, which is still the load-bearing part of this entry: activation
+      measures routing, not quality, so folding it into the rubric would mix two axes.
+      Location correction (2026-08-07): this originally landed as `internal/activation`,
+      which no longer exists. The confusion matrix moved to `skillet/ratchet` when Adopt-2
+      reworked it (so adh and skillsaw share one implementation) and the reporting stayed
+      in `cmd/activation`. `internal/` now holds only `edit` and `rubric`.
 
 ## The shared `test-prompts.json` contract
 
@@ -204,12 +209,50 @@ Source: `~/Documents/agent-orange/gemini_skills/processing/gap_analysis.md`.
       the manifest's `sha256` field (`skillet/manifest`) — so nothing needs to be computed,
       only *read*. skillsaw today rediscovers the tree via `skill.DiscoverRoots` and ignores
       the manifest entirely. Add:
-      1. a manifest reader + a way to ask "which skills changed since this base manifest?"
-         (a `skillsaw changed --manifest base.json --tree DIR` listing slugs whose hash
-         moved, or new/removed) — the agent then re-judges only those;
+      1. ~~a manifest reader + a way to ask "which skills changed since this base
+         manifest?"~~ **Done upstream in skillet (2026-08-07):** `manifest.Parse`,
+         `manifest.Diff(base, cur) Delta`, and `Delta.Stale()`. What remains here is the
+         `skillsaw changed --manifest base.json --tree DIR` command wrapping them — scan
+         the tree into a `manifest.Manifest` literal (`Tree` + `Skills`, hashing each via
+         `skill.Load(...).Hash()`), call `Diff`, print `Stale()`. Two corrections to the
+         shape assumed above: it must list **tree-relative dirs, not slugs** (`DiscoverRoots`
+         scans four roots, so `.claude/skills/foo` and `.cursor/skills/foo` share a slug and
+         a slug-keyed listing is ambiguous — `Diff` already keys on location), and the
+         `--tree` spelling must not matter (`Diff` relativizes to each manifest's `Tree`,
+         so don't re-derive paths around it). skillet deliberately does **not** ship the
+         tree-scan helper — one consumer, held by promote-on-second-consumer — so the walk
+         lives here. **DONE (2026-08-07): `skillsaw changed --manifest base.json
+         [--tree DIR] [--json]`.** No `internal/` package: the pure core is already
+         upstream (`Parse`/`Diff`/`Stale`), and a local one that only forwarded to it
+         would be a layer to see through. Scans into a `manifest.Manifest` struct literal
+         rather than `manifest.Build`, because `Build` also takes the emitting tool and
+         whether every gate passed and neither means anything for a freshly-walked tree.
+         A skill whose `SKILL.md` is present but unreadable is recorded with **no hash**
+         rather than skipped, so `Diff`'s unknown-hash rule lands it in the campaign;
+         skipping would drop it from the tree's inventory for good, and one bad skill must
+         not abort the walk. A *deleted* `SKILL.md` is a different case -- discovery does
+         not see the directory at all, so it is correctly reported as removed. Exits 0
+         whether or not anything is stale: it is a query, and `verified` is the gate.
+         `--all`/`--roots` deferred -- `Diff` needs one `Tree` to relativize against, and
+         location-keying already makes the multi-root case correct when it is added.
+         Verified on the real 233-skill tree against a manifest written by the released
+         `exegesis verify`: untouched reports 0 to reprocess / 233 unchanged; after one
+         edit, one deletion and one addition it names exactly those two as stale with 1
+         removed; and absolute and relative `--tree` spellings agree.
       2. a hash-keyed `scores.json` cache so a `--scores` file records which hash it was
          judged against, and a stale entry is an error rather than a silent reuse;
-      3. gate on `structure_verified` — refuse to optimize a tree exegesis marked unverified.
+      3. ~~gate on `structure_verified`~~ **DONE (2026-08-07): `skillsaw verified
+         MANIFEST`**, exit 0 only when the manifest says the structure passed. A separate
+         command, not a flag on `changed`, because the TODO is right that it is
+         independent: an unverified tree is unfit to optimize whether or not anything in
+         it changed. skillsaw has no `optimize` subcommand to hang it on -- the loop lives
+         in `skillsaw-skill` -- so the skill calls it and checks the exit code.
+         It prints the tool, tree and skill count beside the verdict: a bare pass/fail
+         leaves the reader unable to tell whether they gated the manifest they meant.
+         A file that is not a manifest is an **error**, not a quiet "unverified" --
+         `manifest.Parse` already rejects a document with no `tool` field, and reporting a
+         zero-valued manifest as a failed gate would send the reader hunting for
+         structural defects in a tree that was never examined.
       (3) is a free correctness win independent of the caching. Drop the "90%" figure; the
       real saving is "one judge pass per *changed* skill per campaign", unmeasured.
 - [ ] **Serialize derived checks back to `test-prompts.json` — but as a `tests` command,
@@ -230,6 +273,14 @@ Source: `~/Documents/agent-orange/gemini_skills/processing/gap_analysis.md`.
       `{test_cases}`/`expected_behavior`) and `Write` emits only the canonical one, so any
       legacy file is silently migrated by the same command. Either refuse to write back over
       a non-canonical file or say plainly that it converts.
+      **(c) is unblocked upstream (available since the v0.11.0 bump):** the "refuse" option was
+      unimplementable because `Parse` discarded what it matched. `File.Rewrites []string` now
+      lists every difference from canonical form — `len()==0` means the file was canonical,
+      and the strings are written for a message (`case 3: legacy "expected_behavior" field;
+      canonical is "expected"`). Print them and convert, or refuse when non-empty; either is
+      now a two-line decision. Enumerating them surfaced a fourth case worth surfacing to the
+      user: **when a file has both `tests` and `test_cases`, the reader has always preferred
+      `tests` and dropped the rest**, so a write-back deletes cases still visible on disk.
       Cross-repo: derived checks are a producer concern as much as a consumer one — decide
       whether this lands here or as `exegesis tests --derive-checks` (see
       `../exegesis/TODO.md`); duplicating it in both is the outcome to avoid.
@@ -239,16 +290,46 @@ Source: `~/Documents/agent-orange/gemini_skills/processing/gap_analysis.md`.
 Source: a survey of `~/Documents/git/unified-thinking` (a deterministic Go reasoning
 toolkit) for reusable techniques.
 
-- [ ] **Calibrate the rubric / judge scores.** skillsaw has Wilson CIs on *activation*
-      (a proportion), but does not measure whether its rubric/judge confidence is
-      *calibrated* against realized skill quality. Once `skillet/calibration` lands
-      (Brier/ECE/MCE — see `../../git/skillet/TODO.md`), track predicted score vs. observed
-      quality to surface a systematically over/under-confident judge — the same reliability
-      gap adh has.
-- [ ] Consider a timeseries **regression gate** for rubric quality across skill versions —
-      a CI check that fails on a quality *drop* vs. the recent baseline, not just a fixed
-      threshold. unified-thinking's `benchmarks/reporting/timeseries.go` (`DetectRegression`,
-      rolling-window baseline) is a clean, deterministic reference.
+- [x] **Calibrate the judge scores.** DONE (2026-08-07): `internal/calibrate` +
+      `skillsaw calibrate [--json] JUDGMENTS.json` over `skillet/calibration`
+      (ECE/MCE/Brier, ten equal-width bins). Input is
+      `{"judgments":[{skill, dim, base, passed}]}` — the 1-10 confidence stated before an
+      outcome was known, and what the outcome turned out to be.
+      **The subject is a prediction the outcome cannot see:** the agent's stated confidence
+      that an edit will pass the validation gate. The confidence is fixed at STEP 3 when the
+      edit is proposed; `gate` decides at STEP 6 after an independent re-score.
+      **Correction (2026-08-07):** an earlier draft named dim 8 as the source. That was
+      wrong and is fixed in the help text, the package doc and here. The dim-8 base is
+      *computed from* the judge output (`round(10 × mean soft)`), so scoring it against
+      `judge`'s hard verdict measures how the checks were written, not how well the agent
+      judges. `DET.SCORE` is not the subject either — a deterministic total is a function of
+      the file and has no variance to calibrate.
+      **Interpretation limit, stated in the help text and the code:** the 1-10 → [0,1] map
+      is a convention, not a probability — a base of 8 does not assert an 80% chance of
+      passing. What the report supports is the *relative* signal: accuracy sitting below
+      confidence across bins means systematic overconfidence. Do not read Brier as a
+      probability claim.
+      Reports, does not gate — no `--max-ece`, because no threshold has been calibrated
+      and a knob nobody can value is worse than none. A base outside 1-10 is dropped
+      rather than clamped (clamping would invent a judgment) and the drop is reported, as
+      is a thin sample, since a ten-bin report over a handful of judgments is mostly noise.
+      Not wired into `skillsaw-skill`: the agent loop does not yet record these judgments,
+      and documenting a workflow nobody runs is how merge-skills ended up instructing
+      agents to call commands that do not exist. Wiring it up is the natural follow-on —
+      the loop already computes both halves at STEP 5.
+- [ ] A timeseries **regression gate** for rubric quality across skill versions — a CI check
+      that fails on a quality *drop* vs. the recent baseline, not just a fixed threshold.
+      **The math now lives in `skillet/timeseries`** (2026-08-07, available since the v0.11.0 bump): wanting it
+      here *and* in exegesis was the 2nd consumer that promoted it.
+      `Detect(history, current, Config) Verdict`; what remains here is reading the history out
+      of `results.tsv` (`skillet/auditlog` already parses it) and choosing a `Tolerance`.
+      Two things to get right when wiring it: `Verdict.Compared` is false when history is too
+      short and must **not** be read as "passed" — a gate that fails a metric's first run can
+      only be fixed by not measuring; and `Tolerance` is absolute, in the rubric's own units,
+      so a zero tolerance calls any dip below the mean a regression.
+      Correction to the note below: unified-thinking's `DetectRegression` is *not* a
+      rolling-window baseline — it uses the single most recent entry, treats a zero baseline
+      as an absent one, and divides by the baseline. skillet's version fixes all three.
 - Note: skillsaw's TP/FP/TN/FN activation confusion matrix (with Wilson intervals) is
       already more rigorous than unified-thinking's binary exact/contains/tolerance
       evaluators — nothing to adopt there. Calibration is the one real gap; its keyword
