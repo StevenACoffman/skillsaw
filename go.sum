@@ -1,5 +1,5 @@
-github.com/StevenACoffman/skillet v0.12.0 h1:uKESVQVwretot0oyJy7s/43dCF4F/KtW8ABmKaTDrlA=
-github.com/StevenACoffman/skillet v0.12.0/go.mod h1:ASlQ3/6uPMnxVKEQUaYnqcB0ch9zBdRg8e0NLmlI0qE=
+github.com/StevenACoffman/skillet v0.13.0 h1:PgnGvaSKIZHFqGBvLdHj1FAb17I7BSimXLk31faV3HM=
+github.com/StevenACoffman/skillet v0.13.0/go.mod h1:ASlQ3/6uPMnxVKEQUaYnqcB0ch9zBdRg8e0NLmlI0qE=
 github.com/StevenACoffman/toerr v0.1.0 h1:Bd9cPe/iAiFd9boP6fNcwkyJW7lwEKQtksWbbKVwNG0=
 github.com/StevenACoffman/toerr v0.1.0/go.mod h1:AdIwfFGbcKfzztZts0uNo621iylYWOjGQL1YeFw3H1E=
 github.com/goccy/go-yaml v1.19.2 h1:PmFC1S6h8ljIz6gMRBopkjP1TVT7xuwrButHID66PoM=
