@@ -482,6 +482,19 @@ frameworks were fused *here*, by this repo. The README's attribution (SkillLens 
 should stay; what is worth adding is that skillsaw is the only place that fusion exists.
 
 - [ ] **Move dims 3/5/9's detectors to `skillet/skilllens` and delete the private copies.**
+      **Upstream is done (2026-08-08); this is now waiting on a skillet release.**
+      `skillet/skilllens` exists with `FailureMechanisms`, `SofteningPhrases` and
+      `BlacklistSections` over `*markdown.Doc`, plus `FailureSectionTitles()`,
+      `SofteningTerms()` and `BlacklistTitles()` for `Config` to source.
+      Two things to know when wiring it: the detectors return `[]Span` with a `Kind`, so
+      dim 3 filters `KindProse` for its inline-branch count and `KindSection` for the
+      has-a-failure-section check — it must not just take `len()`. And `Span.Units` carries
+      the section's content count, so dim 9's "out-weighs the body" threshold stays here
+      rather than moving up.
+      Equivalence was proved before landing: the promoted detectors and the copies below
+      agree on all four counts across the real 233-skill corpus, 0 mismatches. So deleting
+      the private copies should move no score — if a score does move, the wiring is wrong,
+      not the promotion.
       `internal/rubric` owns the `failureEN`/`failureCN` regexes and the `FailureSections`,
       `Softening` and `BlacklistHeadings` vocabularies. Nothing about them is
       skillsaw-specific — they are a mechanization of SkillLens's three tests and its
