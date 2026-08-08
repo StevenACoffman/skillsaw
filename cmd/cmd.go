@@ -27,6 +27,7 @@ import (
 	"github.com/StevenACoffman/skillsaw/cmd/preflight"
 	"github.com/StevenACoffman/skillsaw/cmd/root"
 	"github.com/StevenACoffman/skillsaw/cmd/scan"
+	"github.com/StevenACoffman/skillsaw/cmd/verified"
 	"github.com/StevenACoffman/skillsaw/cmd/version"
 )
 
@@ -51,6 +52,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	judge.New(r)
 	preflight.New(r)
 	calibrate.New(r)
+	verified.New(r)
 	// register new commands here
 
 	if err := r.Command.Parse(args, ff.WithEnvVarPrefix("SKILLSAW")); err != nil {
