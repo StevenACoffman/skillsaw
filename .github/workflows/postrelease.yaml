@@ -1,0 +1,32 @@
+name: Post-Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  pypi-publish:
+    name: Publish to PyPI
+    environment: pypi
+    permissions:
+      id-token: write
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install gowheels
+        run: go install github.com/StevenACoffman/gowheels@main
+
+      - name: Build wheels and publish to PyPI
+        run: gowheels pypi --name climax --package-name climaxgo --repo ${{ github.repository }} --upload
+        env:
+          GOWHEELS_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

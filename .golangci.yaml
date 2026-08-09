@@ -282,6 +282,10 @@ linters:
       extra-ignore-sigs:
         - .Errorf(
         - fmt.Errorf(
+        # toerr's message-wrapping constructor: wraps the cause (Unwrap chain
+        # preserved) plus a message and trace frame — a genuine wrap, so wrapcheck
+        # should treat it like the built-in .Wrap(/.WithMessage( it already allows.
+        - .WrapWithMessage(
 
     # ── depguard ─────────────────────────────────────────────────────────────
     # spec.md: climax uses its own command pattern; no third-party CLI frameworks.

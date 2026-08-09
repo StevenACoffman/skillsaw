@@ -3,6 +3,9 @@ go = "latest"
 golangci-lint = "latest"
 goreleaser = "latest"
 "github:gotestyourself/gotestsum" = "latest"
+# supply-chain tooling: syft generates the SBOM, cosign signs the checksum.
+syft = "latest"
+cosign = "latest"
 
 [env]
 LOG_LEVEL = "debug"
@@ -14,6 +17,14 @@ run = "go run ."
 [tasks.build]
 description = "Build the binary with goreleaser"
 run = "goreleaser build --snapshot --clean"
+
+[tasks.sbom]
+description = "Build the source tarball + SBOM locally (goreleaser snapshot; signing skipped)"
+run = "goreleaser release --snapshot --clean --skip=sign"
+
+[tasks.check]
+description = "Validate the goreleaser configuration"
+run = "goreleaser check"
 
 [tasks.test]
 description = "Run all go tests using gotestsum"

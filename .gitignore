@@ -307,3 +307,4 @@ dist/
 
 # Rumdl - markdown linter cache
 .rumdl_cache
+.vale
