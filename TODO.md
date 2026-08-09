@@ -490,22 +490,24 @@ frameworks were fused *here*, by this repo. The README's attribution (SkillLens 
 3-dimension rubric, SkillOpt = the gate ratchet and rule-judge operators) is accurate and
 should stay; what is worth adding is that skillsaw is the only place that fusion exists.
 
-- [ ] **Move dims 3/5/9's detectors to `skillet/skilllens` and delete the private copies.**
-      **Blocked on a skillet release — and the "0 mismatches" claim below was wrong.**
-      The migration was written and reverted after the score spot-check the entry demands
-      caught **~30 skills moving** (e.g. dim9 `9→2`, det_score `95.2→87.4`). Root cause:
-      book2skill's B segment is titled `## B — Boundaries` (plural), which skillsaw's
-      private matcher matched via its ies-plural rule (`boundary`→`boundaries`) but
-      `skilllens` missed, because it matched section titles with plain `strings.Contains`
-      and `boundary` is not a substring of `boundaries`. So the promoted detector was
-      *less* capable than the copy it replaces — the promotion changed behavior, exactly
-      what the tripwire exists to catch.
-      **Fixed upstream:** `skilllens` now uses the same word-boundary + ies-plural matcher
-      (ported from this rubric, with a regression test on the `Boundaries` heading);
-      skillet PR `skilllens-plural-matcher`. Once released and bumped here, redo the
-      migration — the spot-check should then show 0 dim-3/9 movement (only a few
-      informational dim-5 softening flags, since skilllens matches softening
-      case-insensitively; those do not change any base/penalty on the corpus).
+- [x] **Move dims 3/5/9's detectors to `skillet/skilllens` and delete the private copies.**
+      DONE (on skillet v0.14.0). `checkFailure`, `checkSoftening`, and `deriveBlacklist`
+      now read `skilllens.{FailureMechanisms,SofteningPhrases,BlacklistSections}` (dim 3
+      filters `KindProse` for its inline-branch count and `KindSection` for the
+      has-a-failure-section check; dim 9 takes the richest span's `Units`). The private
+      failure regexes, the `Softening`/`BlacklistHeadings`/`FailureSections` Config lists,
+      and the whole `matchesSignal` matcher are deleted; only the dim-3 `workflowMark`
+      signal and the weights/1-10 mapping stay local.
+      **The first attempt caught a real defect, which is why this waited on a release.**
+      The score spot-check the entry demands showed ~30 skills moving because skilllens's
+      plain `strings.Contains` missed the plural `## B — Boundaries` heading that
+      skillsaw's ies-plural matcher caught. Fixed upstream (skillet#15, released v0.14.0:
+      skilllens now uses the same word-boundary + ies-plural matcher). **Re-verified: the
+      migrated binary scores all 277 corpus skills identically to the pre-migration
+      binary — 0 base/penalty movement on dims 3/5/9.** The only remaining differences are
+      informational flag text (dim-3 branch counts no longer add bare `fallback`/`兜底`;
+      dim-5 softening is now case-insensitive), none of which move a base, penalty, or
+      total. adh and skillsaw now share one definition of these three dimensions.
       `skillet/skilllens` exists with `FailureMechanisms`, `SofteningPhrases` and
       `BlacklistSections` over `*markdown.Doc`, plus `FailureSectionTitles()`,
       `SofteningTerms()` and `BlacklistTitles()` for `Config` to source.
