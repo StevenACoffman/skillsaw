@@ -8,6 +8,16 @@
 // what a model would still need to score, and computes a "deterministic score"
 // that assumes a perfect base for those dims and docks only objectively
 // detectable defects (a linter-style lower bound on quality loss).
+//
+// Three of the nine come from a different source than darwin's spec §8. Dimensions
+// 3 (failure-mode encoding), 5 (actionable specificity), and 9 (counter-examples /
+// blacklist) are the microsoft/SkillLens quality rubric (arXiv:2605.23899), each
+// validated at 65-66% predictive accuracy against downstream skill utility. Their
+// detectors — the failure/softening/blacklist vocabularies and matcher below — are a
+// mechanization of SkillLens's three tests; the weights and 1-10 mapping stay
+// skillsaw's. The same three are the shared skillet/skilllens detectors that adh also
+// scores, which is why they are being promoted there (see internal note); until that
+// lands they live here.
 package rubric
 
 import (
@@ -127,7 +137,8 @@ func DefaultConfig() *Config {
 }
 
 // Dimensions returns the authoritative rubric. Weights use the reconciled table
-// from spec D1 (dim6 = 5) so the nine weights sum to exactly 100.
+// from spec D1 (dim6 = 5) so the nine weights sum to exactly 100. Dims 3, 5, and 9
+// are the SkillLens dimensions (see the package doc); the rest are darwin's spec §8.
 func Dimensions() []Dimension {
 	return []Dimension{
 		{1, "frontmatter", "Frontmatter quality", 7, true},
