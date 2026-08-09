@@ -403,7 +403,16 @@ None of these need a skillet change. Where one would have, skillet already has i
       hash captures at STEP 2 and STEP 4 had no remaining reader; their comment still said
       "needed by STEP 5", which was no longer true. Removed rather than left as
       instructions nothing acts on.
-- [ ] **A report of which cases still lack `checks`, scoped to a directory.** Follows from
+- [x] **A report of which cases still lack `checks`, scoped to a directory.** DONE:
+      `skillsaw checks [--tree DIR] [--json]` (`cmd/checks`) walks the tree, loads each
+      `test-prompts.json`, counts the `Behavioral()` cases whose `ChecksFor` returns none,
+      and exits non-zero while any remain — a campaign gate like `verified`. Decoys are
+      not counted. No `internal/` package: the pure core (`Load`/`Behavioral`/`ChecksFor`)
+      is upstream, so it is a walk and a tally in the command. An unreadable
+      `test-prompts.json` is noted, not fatal (presence is `verified`'s gate). Verified on
+      the real corpus: e.g. `books/hashimoto` reports `table-driven-named-cases: 8/8` and
+      exits 1. Original entry follows.
+- [ ] ~~**A report of which cases still lack `checks`, scoped to a directory.**~~ Follows from
       the 2026-08-08 decision to author checks corpus-wide *with a directory limit* (see
       `skillsaw-skill/TODO.md`): the work is taken in parts, so "how much is left here"
       has to be answerable without re-running the ad-hoc measurement that produced the
@@ -482,7 +491,21 @@ frameworks were fused *here*, by this repo. The README's attribution (SkillLens 
 should stay; what is worth adding is that skillsaw is the only place that fusion exists.
 
 - [ ] **Move dims 3/5/9's detectors to `skillet/skilllens` and delete the private copies.**
-      **Upstream is done (2026-08-08); this is now waiting on a skillet release.**
+      **Blocked on a skillet release — and the "0 mismatches" claim below was wrong.**
+      The migration was written and reverted after the score spot-check the entry demands
+      caught **~30 skills moving** (e.g. dim9 `9→2`, det_score `95.2→87.4`). Root cause:
+      book2skill's B segment is titled `## B — Boundaries` (plural), which skillsaw's
+      private matcher matched via its ies-plural rule (`boundary`→`boundaries`) but
+      `skilllens` missed, because it matched section titles with plain `strings.Contains`
+      and `boundary` is not a substring of `boundaries`. So the promoted detector was
+      *less* capable than the copy it replaces — the promotion changed behavior, exactly
+      what the tripwire exists to catch.
+      **Fixed upstream:** `skilllens` now uses the same word-boundary + ies-plural matcher
+      (ported from this rubric, with a regression test on the `Boundaries` heading);
+      skillet PR `skilllens-plural-matcher`. Once released and bumped here, redo the
+      migration — the spot-check should then show 0 dim-3/9 movement (only a few
+      informational dim-5 softening flags, since skilllens matches softening
+      case-insensitively; those do not change any base/penalty on the corpus).
       `skillet/skilllens` exists with `FailureMechanisms`, `SofteningPhrases` and
       `BlacklistSections` over `*markdown.Doc`, plus `FailureSectionTitles()`,
       `SofteningTerms()` and `BlacklistTitles()` for `Config` to source.
@@ -511,13 +534,13 @@ should stay; what is worth adding is that skillsaw is the only place that fusion
       Once landed, `Config`'s four SkillLens-derived lists come from skillet and the
       remaining `DefaultConfig` fields (`FillerTails`, `Slop`, `CheckpointMarkers`) stay
       local, since dims 1/4/7 have no second consumer.
-- [ ] **Cite the dimensions' provenance where a reader will hit it.** `rubric.go`'s package
-      doc calls the whole thing "the darwin 9-dimension rubric (spec §8)", and the
-      `Dimensions()` table gives no hint that three of the nine come from a different,
-      externally-validated source with published tests and anti-examples. The README says
-      so; the code does not. This matters for the judge tier: `skillsaw-skill` has the agent
-      hand-score dims 3 and 5, and those two have a stated definition it is not being given
-      (tracked in that skill's TODO).
+- [x] **Cite the dimensions' provenance where a reader will hit it.** DONE. `rubric.go`'s
+      package doc now names dims 3 (failure), 5 (specificity), and 9 (blacklist) as the
+      microsoft/SkillLens rubric (arXiv:2605.23899, 65-66% predictive accuracy), a
+      mechanization of its three tests with the weights/1-10 mapping kept local; the
+      `Dimensions()` doc cross-references it. This matters for the judge tier:
+      `skillsaw-skill` hand-scores dims 3 and 5, which now have their stated source in the
+      code, not only the README.
 - Deliberately NOT adopted from SkillOpt: **`compute_semantic_density`**
       (`skillopt/evaluation/gate.py`), the one genuinely new dimension on its validation
       gate. It counts leading imperatives (`MUST`/`ALWAYS`/`NEVER`/…) and adds
