@@ -13,11 +13,9 @@
 // 3 (failure-mode encoding), 5 (actionable specificity), and 9 (counter-examples /
 // blacklist) are the microsoft/SkillLens quality rubric (arXiv:2605.23899), each
 // validated at 65-66% predictive accuracy against downstream skill utility. Their
-// detectors — the failure/softening/blacklist vocabularies and matcher below — are a
-// mechanization of SkillLens's three tests; the weights and 1-10 mapping stay
-// skillsaw's. The same three are the shared skillet/skilllens detectors that adh also
-// scores, which is why they are being promoted there (see internal note); until that
-// lands they live here.
+// detectors are skillet/skilllens (FailureMechanisms, SofteningPhrases,
+// BlacklistSections), which adh also scores, so the two tools cannot drift; the weights
+// and 1-10 mapping stay skillsaw's.
 package rubric
 
 import (
@@ -32,23 +30,18 @@ import (
 	"github.com/StevenACoffman/skillet/markdown"
 	"github.com/StevenACoffman/skillet/neutrality"
 	"github.com/StevenACoffman/skillet/skill"
+	"github.com/StevenACoffman/skillet/skilllens"
 	"github.com/StevenACoffman/skillet/speclint"
 )
 
 // These are the *semantic* patterns the rubric still owns. Markdown structure
 // (headings, lists, tables, links, code fences) is now parsed by the markdown
 // package via goldmark; only meaning-bearing phrase detection lives here.
-var (
-	// failureCN/failureEN detect inline "if X fails / when Y errors" branches in
-	// prose (code already blanked by markdown.Doc.Prose).
-	failureCN = regexp.MustCompile(`如果.{0,24}(失败|错误|不可用|超时|冲突|缺失|找不到|异常|没有)`)
-	failureEN = regexp.MustCompile(
-		`(?i)(if|when)\s.{0,40}(fail|error|missing|unavailable|timeout|not found|goes wrong|blocked|get stuck|gets stuck)`,
-	)
-	// workflowMark detects step/phase language. Numbered-list detection is handled
-	// structurally by markdown.Doc.HasOrderedList, so it is no longer regex'd here.
-	workflowMark = regexp.MustCompile(`(?i)(步骤|phase\s|step\s)`)
-)
+// workflowMark detects step/phase language. Numbered-list detection is handled
+// structurally by markdown.Doc.HasOrderedList, so it is no longer regex'd here. The
+// failure-branch and section detectors moved to skillet/skilllens (dims 3/5/9); only
+// this dim-3 workflow signal, which is policy rather than a SkillLens detector, stays.
+var workflowMark = regexp.MustCompile(`(?i)(步骤|phase\s|step\s)`)
 
 // Dimension is one rubric axis.
 type Dimension struct {
@@ -87,13 +80,15 @@ type Evaluation struct {
 }
 
 // Config holds the tunable, deterministic knobs (all config-driven per §8.2).
+//
+// Dims 3, 5, and 9 no longer carry vocabularies here: their detectors moved to
+// skillet/skilllens, which owns the failure-section, softening, and blacklist term
+// lists so skillsaw and adh cannot drift. Only the dims with no second consumer keep
+// their lists local.
 type Config struct {
 	FillerTails       []string // dim1: banned trailing filler
-	Softening         []string // dim5: softening phrases (>=3 -> penalty)
 	Slop              []string // dim7: AI-slop words (each -> -1)
 	CheckpointMarkers []string // dim4: explicit visual markers
-	BlacklistHeadings []string // dim9: section-title signals for a counter-example section
-	FailureSections   []string // dim3: headings that count as failure-mode encoding
 }
 
 // DefaultConfig returns the banned/marker/heading lists. It covers both the
@@ -107,11 +102,6 @@ func DefaultConfig() *Config {
 			"as appropriate", "use your judgment", "as needed",
 			"depending on context", "your mileage may vary",
 		},
-		Softening: []string{
-			"建议", "可以考虑", "根据情况", "灵活把握", "视情况而定",
-			"as appropriate", "it depends", "you might want", "feel free",
-			"at your discretion", "where appropriate", "as you see fit", "if you prefer",
-		},
 		Slop: []string{
 			"说白了", "换句话说", "综上", "首先", "其次",
 			"in other words", "that said", "at the end of the day",
@@ -119,19 +109,6 @@ func DefaultConfig() *Config {
 		},
 		CheckpointMarkers: []string{
 			"🔴", "🛑", "⚠️", "🚨", "🚦", "STOP", "CHECKPOINT", "HALT",
-		},
-		BlacklistHeadings: []string{
-			"反例", "黑名单", "反模式", "不要做", "不要",
-			"don't", "do not", "avoid", "blacklist", "boundary", "pitfall",
-			"anti-pattern", "antipattern", "when not to", "common mistake",
-			"common failure", "red flag", "red line", "failure mode", "gotcha",
-			"caution", "limitation",
-		},
-		FailureSections: []string{
-			"反例", "边界", "异常", "失败", "回退",
-			"boundary", "pitfall", "anti-pattern", "antipattern", "failure mode",
-			"common failure", "when not to", "troubleshoot", "if this fails", "limitation",
-			"edge case", "recovery", "when it breaks", "gotcha", "fallback", "red line",
 		},
 	}
 }
@@ -222,17 +199,17 @@ func applyChecks(num int, s *skill.Skill, doc *markdown.Doc, cfg *Config, ds *Di
 	case 1:
 		checkFrontmatter(s, cfg, ds)
 	case 3:
-		checkFailure(doc, cfg, ds)
+		checkFailure(doc, ds)
 	case 4:
 		deriveCheckpoint(doc, cfg, ds)
 	case 5:
-		checkSoftening(doc, cfg, ds)
+		checkSoftening(doc, ds)
 	case 6:
 		deriveResources(s, doc, ds)
 	case 7:
 		checkSlop(doc, cfg, ds)
 	case 9:
-		deriveBlacklist(doc, cfg, ds)
+		deriveBlacklist(doc, ds)
 	}
 }
 
@@ -279,17 +256,21 @@ func checkFrontmatter(s *skill.Skill, cfg *Config, ds *DimScore) {
 	}
 }
 
-func checkFailure(doc *markdown.Doc, cfg *Config, ds *DimScore) {
-	prose := doc.Prose
-	branches := len(failureCN.FindAllString(prose, -1)) +
-		len(failureEN.FindAllString(prose, -1)) +
-		strings.Count(strings.ToLower(prose), "fallback") +
-		strings.Count(prose, "兜底")
-	// A dedicated boundary / anti-pattern / troubleshooting section is itself
-	// failure-mode encoding, even without inline "if X fails" branches — which is
-	// how most decision-framework skills document their limits.
-	hasSection := sectionTitleMatches(doc, cfg.FailureSections)
-	hasWorkflow := doc.HasOrderedList || workflowMark.MatchString(prose)
+func checkFailure(doc *markdown.Doc, ds *DimScore) {
+	// skilllens.FailureMechanisms is the shared definition of an inline "if X fails"
+	// branch (KindProse) and a dedicated failure/boundary section (KindSection). A
+	// section is itself failure-mode encoding even without inline branches, which is how
+	// most decision-framework skills document their limits.
+	branches, hasSection := 0, false
+	for _, sp := range skilllens.FailureMechanisms(doc) {
+		switch sp.Kind {
+		case skilllens.KindProse:
+			branches++
+		case skilllens.KindSection:
+			hasSection = true
+		}
+	}
+	hasWorkflow := doc.HasOrderedList || workflowMark.MatchString(doc.Prose)
 	if branches == 0 && !hasSection && hasWorkflow {
 		ds.Penalty += 3
 		ds.Flags = append(
@@ -331,11 +312,8 @@ func deriveCheckpoint(doc *markdown.Doc, cfg *Config, ds *DimScore) {
 	ds.Flags = append(ds.Flags, strconv.Itoa(n)+" explicit checkpoint marker(s)")
 }
 
-func checkSoftening(doc *markdown.Doc, cfg *Config, ds *DimScore) {
-	n := 0
-	for _, w := range cfg.Softening {
-		n += strings.Count(doc.Prose, w)
-	}
+func checkSoftening(doc *markdown.Doc, ds *DimScore) {
+	n := len(skilllens.SofteningPhrases(doc))
 	switch {
 	case n >= 3:
 		ds.Penalty += 3
@@ -458,13 +436,14 @@ func checkSlop(doc *markdown.Doc, cfg *Config, ds *DimScore) {
 	ds.Penalty += n // §8.2: each occurrence -1
 }
 
-func deriveBlacklist(doc *markdown.Doc, cfg *Config, ds *DimScore) {
+func deriveBlacklist(doc *markdown.Doc, ds *DimScore) {
 	units := -1 // -1 => no recognized section at all
 	// Score the richest matching section, not the first: a thin early "Caution"
-	// note must not hide a later 10-row "Common Mistakes" table.
-	for _, sec := range doc.Sections {
-		if containsAny(strings.ToLower(sec.Title), cfg.BlacklistHeadings) && sec.Units > units {
-			units = sec.Units
+	// note must not hide a later 10-row "Common Mistakes" table. skilllens locates the
+	// boundary/counter-example sections; the Units threshold below stays skillsaw policy.
+	for _, sp := range skilllens.BlacklistSections(doc) {
+		if sp.Units > units {
+			units = sp.Units
 		}
 	}
 	switch {
@@ -479,97 +458,6 @@ func deriveBlacklist(doc *markdown.Doc, cfg *Config, ds *DimScore) {
 		ds.Flags = append(ds.Flags, "counter-example section ("+strconv.Itoa(units)+" points)")
 	}
 	ds.HasBase = true
-}
-
-// sectionTitleMatches reports whether any section heading contains one of the
-// (case-insensitive) signal substrings.
-func sectionTitleMatches(doc *markdown.Doc, signals []string) bool {
-	for _, sec := range doc.Sections {
-		if containsAny(strings.ToLower(sec.Title), signals) {
-			return true
-		}
-	}
-	return false
-}
-
-// containsAny reports whether s contains any of the signals. s is already
-// lowercased by callers.
-func containsAny(s string, signals []string) bool {
-	for _, sig := range signals {
-		if matchesSignal(s, strings.ToLower(sig)) {
-			return true
-		}
-	}
-	return false
-}
-
-// matchesSignal reports whether s contains sig or a regular inflection of it
-// (both lowercased). An ASCII signal must begin at a word boundary, so "red flag"
-// does not match "requi[red flag]s" (the "red" is mid-word). Append-only
-// inflections already match because the signal is a prefix of the longer word
-// ("mistake" in "mistakes", "troubleshoot" in "troubleshooting"); the one regular
-// inflection a prefix match cannot reach — a consonant+"y" pluralizing to "ies" —
-// is probed explicitly, so "boundary" matches "boundaries". Non-ASCII (CJK)
-// signals have no word boundaries and match as plain substrings.
-func matchesSignal(s, sig string) bool {
-	if !isASCII(sig) {
-		return strings.Contains(s, sig)
-	}
-	if matchesForm(s, sig) {
-		return true
-	}
-	if plural, ok := iesPlural(sig); ok {
-		return matchesForm(s, plural)
-	}
-	return false
-}
-
-// matchesForm reports whether form appears in s beginning at a word boundary.
-func matchesForm(s, form string) bool {
-	for idx := 0; ; {
-		p := strings.Index(s[idx:], form)
-		if p < 0 {
-			return false
-		}
-		p += idx
-		if p == 0 || !isWordByte(s[p-1]) {
-			return true // form starts at a word boundary
-		}
-		idx = p + 1
-	}
-}
-
-// iesPlural returns sig with a trailing consonant+"y" rewritten to "ies" — the
-// regular English plural that rewrites the stem (boundary->boundaries,
-// policy->policies), which a prefix match cannot reach. ok is false otherwise; a
-// vowel+"y" ("day"->"days") is append-only and already covered by matchesForm.
-func iesPlural(sig string) (plural string, ok bool) {
-	if len(sig) < 2 || sig[len(sig)-1] != 'y' || isVowel(sig[len(sig)-2]) {
-		return "", false
-	}
-	return sig[:len(sig)-1] + "ies", true
-}
-
-func isVowel(b byte) bool {
-	switch b {
-	case 'a', 'e', 'i', 'o', 'u':
-		return true
-	default:
-		return false
-	}
-}
-
-func isASCII(s string) bool {
-	for i := range len(s) {
-		if s[i] >= 0x80 {
-			return false
-		}
-	}
-	return true
-}
-
-func isWordByte(b byte) bool {
-	return (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9')
 }
 
 // finalize computes Final. For dims with a known base, Final = base - penalty.
