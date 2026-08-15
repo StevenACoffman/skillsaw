@@ -561,3 +561,64 @@ func TestJudgeBaseSupersedesPenalty(t *testing.T) {
 		t.Errorf("FullScore = %.4f, want 80.6 (base 7 used as-is, not 7-3)", ev.FullScore)
 	}
 }
+
+// TestDim8ReportsScorabilityWithoutDocking pins the flag-don't-dock contract for dim 8.
+// The absence lives in the test prompts rather than in the skill, so docking would price
+// someone else's unfinished work — and the deterministic score must stay a statement about
+// the skill.
+func TestDim8ReportsScorabilityWithoutDocking(t *testing.T) {
+	t.Parallel()
+	cfg := rubric.DefaultConfig()
+	cases := map[string]struct {
+		prompts  string
+		wantFlag string
+	}{
+		"no file at all": {"", "no readable test-prompts.json"},
+		"cases carry no checks": {
+			`{"tests":[{"id":1,"type":"should_trigger","prompt":"p","expected":"invoke"}]}`,
+			"none of 1 behavioral case(s) specify checks",
+		},
+		"every case carries checks": {
+			`{"tests":[{"id":1,"type":"should_trigger","prompt":"p","expected":"e",` +
+				`"checks":[{"op":"contains","arg":"x"}]}]}`,
+			"all 1 behavioral case(s) specify checks",
+		},
+		// A decoy has no good output to score, so it must not count against scorability.
+		"a decoy alongside a checked case is not counted": {
+			`{"tests":[{"id":1,"type":"should_trigger","prompt":"p","expected":"e",` +
+				`"checks":[{"op":"contains","arg":"x"}]},` +
+				`{"id":2,"type":"should_not_trigger","prompt":"q","expected":"skip"}]}`,
+			"all 1 behavioral case(s) specify checks",
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			dim8 := scoreDim8(t, cfg, tc.prompts)
+			if dim8.Penalty != 0 {
+				t.Errorf("dim 8 Penalty = %d, want 0 — it reports, it does not dock", dim8.Penalty)
+			}
+			if !strings.Contains(strings.Join(dim8.Flags, " | "), tc.wantFlag) {
+				t.Errorf("flags = %v, want one containing %q", dim8.Flags, tc.wantFlag)
+			}
+		})
+	}
+}
+
+// scoreDim8 evaluates a minimal skill carrying prompts as its test-prompts.json (omitted
+// entirely when prompts is empty) and returns its dim-8 score.
+func scoreDim8(t *testing.T, cfg *rubric.Config, prompts string) rubric.DimScore {
+	t.Helper()
+	files := map[string]string{}
+	if prompts != "" {
+		files["test-prompts.json"] = prompts
+	}
+	s := mkSkill(t, "ok-skill", "does x, use when y", "Step 1: act\n", files)
+	for _, d := range rubric.Evaluate(s, cfg).Dims {
+		if d.Num == 8 {
+			return d
+		}
+	}
+	t.Fatal("dim 8 missing from the evaluation")
+	return rubric.DimScore{}
+}
