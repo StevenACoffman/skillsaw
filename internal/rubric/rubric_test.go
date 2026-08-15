@@ -99,9 +99,12 @@ func TestEvaluateDimensions(t *testing.T) {
 			dimNum: 1, wantPenalty: 1, wantFlagPart: "filler tail",
 		},
 		{
+			// The fence is load-bearing: dim 3 docks a skill that runs something and never
+			// says what to do when it fails. Without it this body executes nothing, there is
+			// no runtime failure to encode, and the penalty correctly does not apply.
 			name: "dim3 forward-only workflow penalised", skillName: "ok-skill", desc: "d",
-			body:   "Step 1: do the thing\nStep 2: do the next thing",
-			dimNum: 3, wantFinal: 7, wantPenalty: 3, wantFlagPart: "forward-only",
+			body:   "Step 1: do the thing\nStep 2: do the next thing\n\n```sh\nrun --it\n```\n",
+			dimNum: 3, wantFinal: 7, wantPenalty: 3, wantFlagPart: "runs commands",
 		},
 		{
 			name: "dim3 with fallback not penalised", skillName: "ok-skill", desc: "d",
@@ -111,9 +114,16 @@ func TestEvaluateDimensions(t *testing.T) {
 		{
 			// No markers is not a deterministic defect — dim4 defers to a judge
 			// (final = floor 10) so it stops being the universal diagnosis target.
-			name: "dim4 no markers defers to judge", skillName: "ok-skill", desc: "d",
+			// Both dim-4 flags defer to a judge and dock nothing; they differ in what they
+			// tell the judge. A skill with nothing to run has no step to pause between.
+			name: "dim4 no markers, executes nothing", skillName: "ok-skill", desc: "d",
 			body:   "no visual markers here",
-			dimNum: 4, wantFinal: 10, wantFlagPart: "judge if this skill type",
+			dimNum: 4, wantFinal: 10, wantFlagPart: "executes nothing to checkpoint",
+		},
+		{
+			name: "dim4 no markers, runs commands", skillName: "ok-skill", desc: "d",
+			body:   "no visual markers here\n\n```sh\nrun --it\n```\n",
+			dimNum: 4, wantFinal: 10, wantFlagPart: "runs commands, so judge whether",
 		},
 		{
 			name: "dim4 three markers scores high", skillName: "ok-skill", desc: "d",
@@ -218,16 +228,31 @@ func TestEvaluateDimensions(t *testing.T) {
 			dimNum: 9, wantFinal: 9, wantFlagPart: "points",
 		},
 		{
-			// Corpus fix: a boundary section IS failure-mode encoding, so a
-			// forward-only workflow with one is not penalised on dim3.
-			name:         "dim3 boundary section satisfies failure encoding",
+			// Supersedes an earlier rule that a boundary section is itself failure-mode
+			// encoding. It is a container: 154 of the 233 corpus skills have one with no
+			// inline branch under it, so accepting the heading scored the absence as
+			// present. What actually protects these skills is that they execute nothing.
+			name:         "dim3 boundary section on a skill that executes nothing",
 			skillName:    "ok-skill",
 			desc:         "d",
 			body:         "Step 1: act\nStep 2: act more\n## Boundary\n- when not to apply this\n",
 			dimNum:       3,
 			wantFinal:    10,
 			wantPenalty:  0,
-			wantFlagPart: "failure-handling section",
+			wantFlagPart: "executes nothing",
+		},
+		{
+			// The case the change exists for: the same section, on a skill that does run
+			// something. The heading no longer buys immunity.
+			name:      "dim3 boundary section does not excuse a skill that runs commands",
+			skillName: "ok-skill",
+			desc:      "d",
+			body: "Step 1: act\n## Boundary\n- when not to apply this\n\n" +
+				"```sh\nrun --it\n```\n",
+			dimNum:       3,
+			wantFinal:    7,
+			wantPenalty:  3,
+			wantFlagPart: "runs commands",
 		},
 		{
 			// Corpus fix: a "## Common Failures" section is failure-mode encoding.
@@ -389,8 +414,11 @@ func TestDiagnose(t *testing.T) {
 			name: "cluster dim3 lowest", skillName: "ok-skill",
 			// Forward-only workflow with markers + a "## Blacklist" section that
 			// satisfies dim9 but is NOT a failure-handling heading, so dim3 stays min.
+			// The fence is what makes dim 3's penalty applicable at all: without a skill
+			// that runs something there is no failure to encode and nothing to diagnose.
 			body: "Step 1: act\nStep 2: act more\n" + markers +
-				"\n## Blacklist\n- do not A\n- do not B\n- do not C\n",
+				"\n## Blacklist\n- do not A\n- do not B\n- do not C\n" +
+				"\n```sh\nrun --it\n```\n",
 			wantTargetNum: 3, wantPriority: "P2", wantCluster: true,
 		},
 		{
