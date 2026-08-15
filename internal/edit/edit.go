@@ -40,6 +40,11 @@ func IsNoOp(before, after string) bool {
 // AgainstOriginal returns the defects an edit introduces relative to the text it
 // replaced: one that changed nothing, and one that outgrew the budget.
 //
+// Both are ActionHuman: deciding what to write instead of nothing, or what to cut to get back
+// inside budget, is the judgement the edit step exists to make. Nothing here is
+// ActionAutomatic, and nothing in skillsaw is -- every defect it reports is closed by editing
+// prose whose correctness depends on what the skill means.
+//
 // It takes contents rather than parsed skills because both questions are about bytes. A
 // no-op edit and an oversized one are defects whether or not the result still parses, and
 // requiring a parse first would make a broken edit report the wrong complaint.
@@ -56,12 +61,14 @@ func AgainstOriginal(orig, edited string, maxGrowth float64) []finding.Diagnosti
 	if IsNoOp(orig, edited) {
 		ds = append(ds, finding.Diagnostic{
 			Severity: finding.SeverityError,
+			Action:   finding.ActionHuman,
 			Message:  "edit changed nothing: the content hash is unchanged",
 		})
 	}
 	if !WithinSizeBudget(len(orig), len(edited), maxGrowth) {
 		ds = append(ds, finding.Diagnostic{
 			Severity: finding.SeverityError,
+			Action:   finding.ActionHuman,
 			Message: fmt.Sprintf(
 				"edit is %d bytes against the original's %d, past the %.2gx ceiling",
 				len(edited),

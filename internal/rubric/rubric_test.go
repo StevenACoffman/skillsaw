@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/StevenACoffman/skillet/finding"
 	"github.com/StevenACoffman/skillet/skill"
 	"github.com/StevenACoffman/skillsaw/internal/rubric"
 )
@@ -621,4 +622,47 @@ func scoreDim8(t *testing.T, cfg *rubric.Config, prompts string) rubric.DimScore
 	}
 	t.Fatal("dim 8 missing from the evaluation")
 	return rubric.DimScore{}
+}
+
+// TestDiagnosisSaysWhoActs pins the axis the loop was deciding implicitly: it picks one edit
+// per round, so "is this safe to apply unattended" has to be stated rather than assumed.
+func TestDiagnosisSaysWhoActs(t *testing.T) {
+	t.Parallel()
+	cfg := rubric.DefaultConfig()
+	// Dim 3 is the only dimension producing a deterministic penalty, but it is not
+	// automatically the lowest: the derived dims cap at 9, so dim 9 wins unless the skill
+	// carries a blacklist section. With one, dim 9 scores 9 and dim 3's penalty puts it at 7.
+	s := mkSkill(t, "ok-skill", "does x, use when y",
+		"Step 1: do the thing\n\n```sh\nrun --it\n```\n"+blacklist, nil)
+	d := rubric.Diagnose(rubric.Evaluate(s, cfg))
+	if d.TargetNum != 3 {
+		t.Fatalf("fixture diagnosed dim %d, not 3; it cannot pin the classification", d.TargetNum)
+	}
+	if d.Action != finding.ActionHuman {
+		t.Errorf("dim 3 Action = %q, want human — a failure mechanism needs domain knowledge",
+			d.Action)
+	}
+	// Orthogonal to Priority: neither may be derived from the other.
+	if d.Priority == "" {
+		t.Error("Priority went missing")
+	}
+}
+
+// TestDiagnosisLeavesActionUnsetWithNoTarget pins the zero value's meaning. When there is
+// nothing to fix, naming an actor would be a false instruction — the same reason finding has
+// no ActionUnknown constant.
+func TestDiagnosisLeavesActionUnsetWithNoTarget(t *testing.T) {
+	t.Parallel()
+	cfg := rubric.DefaultConfig()
+	// Structurally healthy: no deterministic weakness, so the diagnosis routes to the judge.
+	s := mkSkill(t, "ok-skill", "does x, use when y",
+		"Step 1: act\n如果失败 → fallback: retry\n"+markers+"\n"+blacklist, nil)
+	d := rubric.Diagnose(rubric.Evaluate(s, cfg))
+	if d.TargetNum != 0 {
+		t.Fatalf("fixture found a weakness (dim %d); it cannot pin the no-target case",
+			d.TargetNum)
+	}
+	if d.Action != "" {
+		t.Errorf("Action = %q with no target; it must stay unset", d.Action)
+	}
 }

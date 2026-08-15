@@ -83,9 +83,23 @@ func (cfg *Config) exec(_ context.Context, args []string) error {
 		return nil
 	}
 
-	for _, d := range diags {
+	cfg.render(diags)
+	return nil
+}
+
+// render writes the human form of each diagnosis. Split from exec because it is the whole
+// of the presentation and none of the decision -- and because the optional lines push exec
+// past the complexity the linter allows.
+func (cfg *Config) render(diags []rubric.Diagnosis) {
+	for i := range diags {
+		d := &diags[i]
 		_, _ = fmt.Fprintf(cfg.Stdout, "%s\n", d.Skill)
 		_, _ = fmt.Fprintf(cfg.Stdout, "  target:    %s  [%s]\n", d.Target, d.Priority)
+		// Omitted rather than printed empty when there is no target to act on: the diagnosis
+		// says nothing needs doing, so naming an actor would contradict it.
+		if d.Action != "" {
+			_, _ = fmt.Fprintf(cfg.Stdout, "  who acts:  %s\n", d.Action)
+		}
 		_, _ = fmt.Fprintf(cfg.Stdout, "  rationale: %s\n", d.Rationale)
 		if d.ClusterNote != "" {
 			_, _ = fmt.Fprintf(cfg.Stdout, "  cluster:   %s\n", d.ClusterNote)
@@ -94,5 +108,4 @@ func (cfg *Config) exec(_ context.Context, args []string) error {
 			_, _ = fmt.Fprintf(cfg.Stdout, "  - %s\n", f)
 		}
 	}
-	return nil
 }
