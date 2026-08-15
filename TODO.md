@@ -597,6 +597,35 @@ toolkit) for reusable techniques.
       Correction to the note below: unified-thinking's `DetectRegression` is *not* a
       rolling-window baseline — it uses the single most recent entry, treats a zero baseline
       as an absent one, and divides by the baseline. skillet's version fixes all three.
+- [x] **Report whether dim 8 can be scored at all.** DONE (2026-08-15). `checkScorable`
+      flags a skill whose behavioral cases specify no checks, and never docks for it.
+      This was silent, and it is the largest hole the rubric had: the dim-8 base comes from
+      `judge --all` over each case's checks, so a skill nothing can score read exactly like
+      one that scored perfectly. Dim 8 is weight 23. Corpus-wide, **183 skills have a
+      `test-prompts.json` with no case specifying checks and 50 have no readable file at
+      all** — every skill in the tree, unscoreable on its heaviest dimension, without
+      saying so. No score moved: 0 of 233.
+      It asks `testprompts.ChecksFor`, the same call `judge --all` makes, so the flag
+      cannot report a case scorable that `judge` would then skip. Partial coverage gets its
+      own message rather than folding into "has checks" — a base over part of a skill's
+      cases is a mean over part of its evidence, and nothing downstream marks it partial.
+- Note: **gate on the artifact, flag on the inputs.** The rule the dim-3 and dim-8 work
+  settled between them, recorded because the two look alike and are not.
+  **Dim 3 is a category error**, so it gets a derived predicate that suppresses the
+  deduction. `HasCodeBlock` is intrinsic to the artifact: a selection document that
+  executes nothing has no runtime failure to encode, and no edit makes it otherwise, so
+  docking prices a defect that cannot exist.
+  **Dim 8 is missing input**, so it gets a flag and no suppression. `expected: "invoke"`
+  is a property of a *different file* describing work not yet done — every one of those
+  skills has outputs worth checking, and rewriting one `expected` makes it scorable.
+  **Do not give dim 8 a category input.** It would launder unfinished work as
+  inapplicable, making 48 skills' missing dim 8 look permanent when the opposite is
+  true and is the whole reason fixing them is worth doing. It would also reintroduce
+  the self-report already rejected for dim 3 — authored alongside the very prompts it
+  excuses — and there is nothing to derive it from: the only available signal is the
+  absence itself, so the gate would be circular.
+  The deterministic floor must never read as "this skill is fine" when the truth is
+  "nobody has measured it".
 - [x] **Gate dim 3's penalty on `markdown.Doc.HasCodeBlock`, and carry dim 4's
       applicability.** DONE (2026-08-15, on skillet v0.15.0).
       **dim 3:** the penalty now applies exactly when `branches == 0 && doc.HasCodeBlock`. A
