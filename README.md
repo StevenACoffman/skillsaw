@@ -257,7 +257,13 @@ skillet/ratchet          validation-gate accept/reject decision
 skillet/auditlog         read/write the results.tsv log
 skillet/speclint         agentskills.io frontmatter spec (rubric dim-1)
 skillet/testprompts      the shared test-prompts.json contract
+skillet/markdown         parsed view of a skill body; HasCodeBlock gates dims 3 and 4
+skillet/skilllens        the three SkillLens detectors behind dims 3, 5 and 9
 ```
+
+`skilllens` and `markdown` are shared with `agentic-dev-harness`, which scores the same
+three SkillLens dimensions under its own names. Two implementations of one rubric drift,
+which is what promoting them prevents.
 
 The design keeps a **pure core / imperative shell** split: everything in `internal/`
 and the shared `skillet` domain packages is value-in, value-out with no I/O; file and
