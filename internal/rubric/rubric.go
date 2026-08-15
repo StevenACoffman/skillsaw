@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -33,15 +32,6 @@ import (
 	"github.com/StevenACoffman/skillet/skilllens"
 	"github.com/StevenACoffman/skillet/speclint"
 )
-
-// These are the *semantic* patterns the rubric still owns. Markdown structure
-// (headings, lists, tables, links, code fences) is now parsed by the markdown
-// package via goldmark; only meaning-bearing phrase detection lives here.
-// workflowMark detects step/phase language. Numbered-list detection is handled
-// structurally by markdown.Doc.HasOrderedList, so it is no longer regex'd here. The
-// failure-branch and section detectors moved to skillet/skilllens (dims 3/5/9); only
-// this dim-3 workflow signal, which is policy rather than a SkillLens detector, stays.
-var workflowMark = regexp.MustCompile(`(?i)(步骤|phase\s|step\s)`)
 
 // Dimension is one rubric axis.
 type Dimension struct {
@@ -270,18 +260,30 @@ func checkFailure(doc *markdown.Doc, ds *DimScore) {
 			hasSection = true
 		}
 	}
-	hasWorkflow := doc.HasOrderedList || workflowMark.MatchString(doc.Prose)
-	if branches == 0 && !hasSection && hasWorkflow {
-		ds.Penalty += 3
-		ds.Flags = append(
-			ds.Flags,
-			"forward-only workflow: no failure branches or boundary section",
-		)
-		return
-	}
 	detail := strconv.Itoa(branches) + " failure branch(es)"
 	if hasSection {
 		detail += " + failure-handling section"
+	}
+	// A matching section title is not itself an encoded failure mechanism: it is a
+	// container, and 154 of the 233 corpus skills have one with no inline branch under it.
+	// Whether that absence is a defect depends on the skill, and doc.HasCodeBlock is the
+	// question that decides it -- a skill that runs commands and never says what to do when
+	// they fail is the defect this dimension exists to catch, while one that executes
+	// nothing has no runtime failure to encode and docking it would be a category error.
+	//
+	// This replaces an older HasOrderedList/workflowMark proxy for the same question.
+	// Answering "does this dimension apply" from two signals in two places let the weaker
+	// one silently decide every case they disagreed on.
+	if branches == 0 && doc.HasCodeBlock {
+		ds.Penalty += 3
+		ds.Flags = append(ds.Flags, detail+" — runs commands but encodes no failure branch")
+		return
+	}
+	if branches == 0 {
+		// Reported, never docked: a mis-derived category must not hide a real gap, and dim 3
+		// is judged anyway, so the base is where this belongs.
+		ds.Flags = append(ds.Flags, detail+" — executes nothing to fail; judge the base")
+		return
 	}
 	ds.Flags = append(ds.Flags, detail+" detected")
 }
@@ -298,11 +300,20 @@ func deriveCheckpoint(doc *markdown.Doc, cfg *Config, ds *DimScore) {
 	// skills; pinning it low made "add checkpoints" a useless universal diagnosis.)
 	if n < 3 {
 		ds.NeedsJudge = true
-		msg := "no explicit checkpoint markers (judge if this skill type needs them)"
-		if n > 0 {
+		msg := "no explicit checkpoint markers; this skill runs commands, so judge whether " +
+			"it needs them"
+		switch {
+		case n > 0:
 			msg = strconv.Itoa(
 				n,
 			) + " checkpoint marker(s) — too few to derive; judge if more are needed"
+		case !doc.HasCodeBlock:
+			// The same sentence reached 230 of 233 corpus skills, which asks the judge the
+			// same question about a runbook and a decision framework. A skill that executes
+			// nothing has no step to pause between, so name that rather than making the
+			// judge re-derive it.
+			msg = "no explicit checkpoint markers, and this skill executes nothing to " +
+				"checkpoint; likely not applicable"
 		}
 		ds.Flags = append(ds.Flags, msg)
 		return
