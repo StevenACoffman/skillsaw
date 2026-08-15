@@ -52,7 +52,7 @@ type DimScore struct {
 	Base       int      `json:"base"`        // 1..10 when known
 	HasBase    bool     `json:"has_base"`    // false => NeedsJudge and no judge supplied
 	Penalty    int      `json:"penalty"`     // deterministic penalty (>=0)
-	Final      int      `json:"final"`       // clamp(effectiveBase - penalty, 1, 10)
+	Final      int      `json:"final"`       // clampScore(effectiveBase - penalty)
 	NeedsJudge bool     `json:"needs_judge"` // base is an LLM judgment
 	Flags      []string `json:"flags,omitempty"`
 }
@@ -153,6 +153,16 @@ func EvaluateWithBases(s *skill.Skill, cfg *Config, bases map[int]int) *Evaluati
 // fullScore computes the weighted total using judge-supplied bases for the
 // needs-judge dimensions. It reports ok=false unless every needs-judge dim has a
 // base — a partial judge cannot produce a trustworthy full total.
+//
+// A judge-supplied base supersedes this dimension's deterministic penalty rather
+// than stacking with it. The judge read the same skill and the same flags, so a
+// base already prices the defect the penalty describes; subtracting both charges
+// for it twice. Dim 3 makes this concrete — it flags "runs commands but encodes no
+// failure branch" and docks 3, and a judge who lowers the base on the strength of
+// that flag would have the skill pay 3 more.
+//
+// A dimension the judge did not score keeps its penalty: there the deterministic
+// check is the only reading of the skill there is.
 func fullScore(dims []DimScore, bases map[int]int) (float64, bool) {
 	if bases == nil {
 		return 0, false
@@ -160,15 +170,15 @@ func fullScore(dims []DimScore, bases map[int]int) (float64, bool) {
 	sum := 0
 	for i := range dims {
 		d := &dims[i]
-		base := d.Base
 		if d.NeedsJudge {
 			b, ok := bases[d.Num]
 			if !ok {
 				return 0, false
 			}
-			base = b
+			sum += clampScore(b) * d.Weight
+			continue
 		}
-		sum += clamp(base-d.Penalty, 1, 10) * d.Weight
+		sum += clampScore(d.Base-d.Penalty) * d.Weight
 	}
 	return float64(sum) / 10.0, true
 }
@@ -343,7 +353,7 @@ func deriveResources(s *skill.Skill, doc *markdown.Doc, ds *DimScore) {
 			ds.Flags = append(ds.Flags, "broken link: "+r)
 		}
 	}
-	ds.Base = clamp(10-broken, 1, 10)
+	ds.Base = clampScore(10 - broken)
 	ds.HasBase = true
 	if broken == 0 {
 		ds.Flags = append(ds.Flags, strconv.Itoa(len(refs))+" resource ref(s), all reachable")
@@ -479,7 +489,7 @@ func finalize(ds *DimScore) {
 	if !ds.HasBase {
 		base = 10
 	}
-	ds.Final = clamp(base-ds.Penalty, 1, 10)
+	ds.Final = clampScore(base - ds.Penalty)
 }
 
 // total computes the weighted rubric total (§8.3): Σ(Final × weight) / 10.
@@ -491,7 +501,14 @@ func total(dims []DimScore) float64 {
 	return float64(sum) / 10.0
 }
 
-func clamp(v, lo, hi int) int {
+// clampScore holds a value to the rubric's 1-10 scale. The bounds are the scale
+// itself rather than parameters: every dimension is scored on it, and a caller
+// that could pass its own would be inventing a second scale.
+//
+// The floor is 1, not 0: no dimension contributes nothing, so a catastrophic dim 8
+// still carries 2.3 of its 23 points.
+func clampScore(v int) int {
+	const lo, hi = 1, 10
 	if v < lo {
 		return lo
 	}

@@ -529,3 +529,35 @@ func TestEmptyFrontmatterFieldsStillReported(t *testing.T) {
 		}
 	}
 }
+
+// TestJudgeBaseSupersedesPenalty pins that a judge-supplied base is not also charged the
+// dimension's deterministic penalty. The judge read the same skill and the same flags, so a
+// base already prices the defect the penalty describes; subtracting both bills it twice.
+func TestJudgeBaseSupersedesPenalty(t *testing.T) {
+	t.Parallel()
+	cfg := rubric.DefaultConfig()
+	// Runs a command and encodes no failure branch, so dim 3 carries its penalty of 3.
+	s := mkSkill(t, "docked-skill", "does x, use when y",
+		"Step 1: act\n\n```sh\nrun --it\n```\n"+markers+"\n"+blacklist, nil)
+
+	ev := rubric.EvaluateWithBases(s, cfg, map[int]int{1: 9, 2: 8, 3: 7, 5: 8, 7: 9, 8: 7})
+	if !ev.HasFullScore {
+		t.Fatal("expected HasFullScore with all judge dims supplied")
+	}
+	// The penalty must still be reported -- suppressing it from the full total is not the
+	// same as pretending it was not found, and the deterministic floor still uses it.
+	var dim3 rubric.DimScore
+	for _, d := range ev.Dims {
+		if d.Num == 3 {
+			dim3 = d
+		}
+	}
+	if dim3.Penalty != 3 {
+		t.Fatalf("dim3 Penalty = %d, want 3 (the fixture must actually be docked)", dim3.Penalty)
+	}
+	// Same weights as TestEvaluateWithBases: dim 3 contributes its base of 7, not 7-3.
+	// (9·7+8·12+7·12+9·6+8·17+10·5+9·12+7·23+9·6)/10 = 80.6
+	if math.Abs(ev.FullScore-80.6) > 1e-9 {
+		t.Errorf("FullScore = %.4f, want 80.6 (base 7 used as-is, not 7-3)", ev.FullScore)
+	}
+}

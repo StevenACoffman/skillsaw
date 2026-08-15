@@ -652,15 +652,29 @@ toolkit) for reusable techniques.
   Dim 4 needs the identical predicate (230 skills flagged "judge if this skill type
   needs them", penalty 0 across all 233), and adh needs it for two dimensions — see the
   promotion note in `../../git/skillet/TODO.md`.
-- [ ] **Revisit dim 3's `-3`, now that it fires on 54 skills rather than 10.** The gate
-      landed first, as planned, so this is the follow-on it was waiting for. The population
-      changed shape: it is no longer "10 CLI wrappers and convention docs" but every skill
-      that runs commands without a failure branch, which is the intended target — the open
-      question is whether **3** is the right size for a deduction that now reaches 23% of
-      the corpus, and whether it should be a deduction at all.
-      Dim 9 remains the comparison: it flags 19 thin counter-example sections and docks
-      none. The argument for docking here is that dim 3's population is now provably the
-      applicable one, which was not true when the `-3` was written.
+- [x] **Revisit dim 3's `-3`, now that it fires on 54 skills rather than 10.** DECIDED and
+      DONE (2026-08-15): **keep the `-3` unchanged, and fix the double-count instead.**
+      **Why the penalty stays.** Dim 9's flag-don't-dock precedent exists for a dimension
+      whose *applicability* is uncertain; dim 3's no longer is — the gate made its population
+      correct by construction, which is exactly what changed. And dim 3's penalty is the
+      **only penalty the whole rubric produces** (54 skills, zero in the other eight
+      dimensions), so converting it to a flag would leave the deterministic floor unable to
+      fail at all. A lint-style floor that always returns the same number is not a floor.
+      Retuning the magnitude was rejected as swapping one uncalibrated constant for another:
+      nothing calibrates 1 versus 2 versus 3, and `skillsaw calibrate` has no recorded
+      judgments to run on.
+      **What was actually wrong was double-counting**, and it was not about size. Dim 3 is
+      `needs_judge`, so `final = clampScore(base − penalty)`: a judge who reads the flag
+      "runs commands but encodes no failure branch" and lowers the base has the skill pay for
+      the same defect twice. `fullScore` now uses a judge-supplied base **as-is** and applies
+      the penalty only to dimensions the judge did not score, where the deterministic check
+      is the only reading of the skill there is.
+      Demonstrated on `gh-cli` with a full base set: **72.7 with the fix, 69.1 stacking** —
+      exactly 3.6, the penalty times its weight. The deterministic floor is untouched: 0 of
+      233 corpus scores moved, and `has_full_score` is still false everywhere because no
+      bases exist yet, so the change is latent until a judge runs.
+      Incidental: `clamp(v, lo, hi)` became `clampScore(v)` once `unparam` noticed every
+      caller passed the same bounds. The 1-10 scale is the rubric's, not a caller's choice.
 - Note: skillsaw's TP/FP/TN/FN activation confusion matrix (with Wilson intervals) is
       already more rigorous than unified-thinking's binary exact/contains/tolerance
       evaluators — nothing to adopt there. Calibration is the one real gap; its keyword
