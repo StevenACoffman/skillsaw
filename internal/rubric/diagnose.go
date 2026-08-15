@@ -1,5 +1,7 @@
 package rubric
 
+import "github.com/StevenACoffman/skillet/finding"
+
 // healthyFinal is the per-dimension score at or above which a dimension is not a
 // deterministic weakness worth flagging. Needs-judge dims floor at 10 and derived
 // dims cap at 9, so without this bar the diagnosis would always point at whichever
@@ -18,6 +20,36 @@ type Diagnosis struct {
 	Rationale   string   `json:"rationale"`
 	ClusterNote string   `json:"cluster_note,omitempty"`
 	Findings    []string `json:"findings,omitempty"`
+	// Action says who can close the diagnosed target: the loop picks one edit per round,
+	// and without this it decides "is this safe to apply unattended" implicitly.
+	//
+	// Orthogonal to Priority, which answers how urgent rather than who acts, and must not be
+	// derived from it: a P0 runtime hit needs a person, and a P3 frontmatter cap does not
+	// become automatable by being unimportant.
+	//
+	// Unset when there is no target -- nothing scored, or every dimension healthy. Claiming a
+	// human is required to fix nothing would be a false instruction, which is the same reason
+	// finding has no ActionUnknown constant.
+	Action finding.Action `json:"action,omitempty"`
+}
+
+// actionFor says who can close a defect in dimension num.
+//
+// A fixed table, not a measurement. Nothing here is ActionAutomatic, and that is a finding
+// rather than an omission: every skillsaw defect is closed by editing prose whose correctness
+// depends on what the skill means, so no tool here can close one unattended. canonizer
+// reached the same conclusion independently over a different artifact.
+func actionFor(num int) finding.Action {
+	switch num {
+	case 1, 4, 6:
+		// A shorter description, a checkpoint marker, a link target: a tool can propose the
+		// text, and only a person knows whether it still says what the skill does.
+		return finding.ActionGuided
+	default:
+		// 2, 3, 5, 7, 8, 9 -- workflow, failure modes, specificity, architecture,
+		// effectiveness and counter-examples each need domain knowledge the tool lacks.
+		return finding.ActionHuman
+	}
 }
 
 // Diagnose produces the next-target recommendation for an evaluated skill.
@@ -28,6 +60,8 @@ func Diagnose(ev *Evaluation) Diagnosis {
 	if ev.RuntimeWarn >= 1 {
 		d.Target = "P0 runtime drift repair"
 		d.Priority = "P0"
+		// Deciding what a runtime-bound phrase should say instead is a rewrite.
+		d.Action = finding.ActionHuman
 		d.Rationale = "runtime-neutrality gate hit; must be fixed before any dimension (spec §9.3, §12 P0)"
 		return d
 	}
@@ -57,6 +91,7 @@ func Diagnose(ev *Evaluation) Diagnosis {
 
 	d.Target = lowest.Name
 	d.TargetNum = lowest.Num
+	d.Action = actionFor(lowest.Num)
 	d.Findings = lowest.Flags
 	d.Priority, d.Rationale = strategyFor(lowest.Num)
 
