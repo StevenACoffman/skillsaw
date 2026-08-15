@@ -597,6 +597,70 @@ toolkit) for reusable techniques.
       Correction to the note below: unified-thinking's `DetectRegression` is *not* a
       rolling-window baseline — it uses the single most recent entry, treats a zero baseline
       as an absent one, and divides by the baseline. skillet's version fixes all three.
+- [x] **Gate dim 3's penalty on `markdown.Doc.HasCodeBlock`, and carry dim 4's
+      applicability.** DONE (2026-08-15, on skillet v0.15.0).
+      **dim 3:** the penalty now applies exactly when `branches == 0 && doc.HasCodeBlock`. A
+      matching section title no longer buys immunity — it is a container, not an encoded
+      mechanism — and the skills it was protecting are the ones the predicate now exempts on
+      a sounder signal. **The old `HasOrderedList || workflowMark` proxy was deleted rather
+      than kept alongside**: answering "does this dimension apply" from two signals in two
+      places is the Information Leakage red flag, and it let the weaker proxy silently decide
+      every case they disagreed on. `golangci-lint`'s `unused` caught `workflowMark` the
+      moment the second answer went away.
+      **dim 4:** nothing to gate — it docks nothing — so the predicate bought a *better
+      question for the judge* instead. One sentence reached 230 of 233 skills, asking the
+      same thing about a runbook and a decision framework; it now splits **149 / 81** between
+      "executes nothing to checkpoint; likely not applicable" and "runs commands, so judge
+      whether it needs them". Same `NeedsJudge`, same zero penalty, strictly more
+      information.
+      **Re-scored:** 44 of 233 totals moved, every one by exactly −3.6 (penalty 3 × weight
+      12 ÷ 10); dim-3 penalties went 10 → 54; **no skill lost a penalty and no penalty
+      changed in any other dimension**. The penalised set matches the prediction "has a code
+      block and no inline branch" exactly — 54 predicted, 54 actual, zero discrepancy either
+      way.
+      **No `units > N` threshold was added.** That was the original proposal; gating makes it
+      unnecessary, and no threshold is calibrated. Recorded so it is not re-proposed.
+- Superseded framing (the measurement and the argument still hold):
+  **Gate dim 3's penalty on a derived "does this skill execute anything" predicate.**
+  Dim 3's section credit is title-based (`"boundary"` is in both
+  `skilllens.FailureSectionTitles()` and `BlacklistTitles()`), so a `## B — Boundaries`
+  heading satisfies it whatever is written underneath. Measured 2026-08-09 over the
+  233-skill corpus: **154 skills (66%) have zero inline failure branches** and pass on
+  the heading alone; only 10 are docked anything, and dim 3 is the *only* dimension in
+  the whole rubric that ever produces a nonzero penalty.
+  A bare `units > N` requirement is the wrong fix — at `units > 3` it more than triples
+  the docked set from 10 to 36, and 10 of the additions are a category error: skills that
+  execute nothing (`ml-simplest-model-baseline-first`, `strategic-before-tactical-ddd`,
+  `microservices-dont-fix-coupling`, `welc-tended-untended-systems`) have no runtime
+  failure to encode.
+  **CLI wrappers are not a category error and must keep being docked** — `gh-cli` has 87
+  shell blocks and 0 failure branches, `rumdl` 13 and 0, `vale` 11 and 0. That is
+  precisely the defect dim 3 exists to catch. Gating on **`markdown.Doc.HasCodeBlock`**
+  (shipped in skillet 2026-08-14) cuts **36 → 26** and suppresses exactly the right ones.
+  **Figures corrected 2026-08-14.** The first pass reported 144/34/20 and named several
+  `grpc-*` skills as executing nothing. Both were measurement defects: a `^```` regex
+  misses a fence indented inside a list item — common in this corpus — and the probe
+  parsed frontmatter as body. Use `HasCodeBlock` rather than a local fence scan when
+  re-measuring; that is what it is for.
+  **Derive the predicate; do not read it from frontmatter.** A declared `category:` is a
+  self-report written by the same generator being measured, letting a skill opt out of
+  its own worst dimension. The corpus has no type field today anyway (only `name`,
+  `description`, `tags`, `allowed-tools`).
+  **Suppress the penalty, always emit the flag.** A mis-derived category that silently
+  hides a real gap is worse than the current over-generous check, which at least fails
+  visibly. This is what dim 4 already does.
+  Dim 4 needs the identical predicate (230 skills flagged "judge if this skill type
+  needs them", penalty 0 across all 233), and adh needs it for two dimensions — see the
+  promotion note in `../../git/skillet/TODO.md`.
+- [ ] **Revisit dim 3's `-3`, now that it fires on 54 skills rather than 10.** The gate
+      landed first, as planned, so this is the follow-on it was waiting for. The population
+      changed shape: it is no longer "10 CLI wrappers and convention docs" but every skill
+      that runs commands without a failure branch, which is the intended target — the open
+      question is whether **3** is the right size for a deduction that now reaches 23% of
+      the corpus, and whether it should be a deduction at all.
+      Dim 9 remains the comparison: it flags 19 thin counter-example sections and docks
+      none. The argument for docking here is that dim 3's population is now provably the
+      applicable one, which was not true when the `-3` was written.
 - Note: skillsaw's TP/FP/TN/FN activation confusion matrix (with Wilson intervals) is
       already more rigorous than unified-thinking's binary exact/contains/tolerance
       evaluators — nothing to adopt there. Calibration is the one real gap; its keyword
