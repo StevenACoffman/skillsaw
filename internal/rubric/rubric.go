@@ -31,6 +31,7 @@ import (
 	"github.com/StevenACoffman/skillet/skill"
 	"github.com/StevenACoffman/skillet/skilllens"
 	"github.com/StevenACoffman/skillet/speclint"
+	"github.com/StevenACoffman/skillet/testprompts"
 )
 
 // Dimension is one rubric axis.
@@ -192,8 +193,8 @@ func scanFiles(s *skill.Skill) []neutrality.NamedFile {
 	return files
 }
 
-// applyChecks runs the deterministic sub-check for a dimension. Dims 2 and 8 have
-// no deterministic check (pure needs-judge) and fall through.
+// applyChecks runs the deterministic sub-check for a dimension. Dim 2 has no
+// deterministic check (pure needs-judge) and falls through.
 func applyChecks(num int, s *skill.Skill, doc *markdown.Doc, cfg *Config, ds *DimScore) {
 	switch num {
 	case 1:
@@ -208,6 +209,8 @@ func applyChecks(num int, s *skill.Skill, doc *markdown.Doc, cfg *Config, ds *Di
 		deriveResources(s, doc, ds)
 	case 7:
 		checkSlop(doc, cfg, ds)
+	case 8:
+		checkScorable(s, ds)
 	case 9:
 		deriveBlacklist(doc, ds)
 	}
@@ -296,6 +299,51 @@ func checkFailure(doc *markdown.Doc, ds *DimScore) {
 		return
 	}
 	ds.Flags = append(ds.Flags, detail+" detected")
+}
+
+// checkScorable reports whether dim 8 can be scored at all, and never docks for it.
+//
+// The dim-8 base is computed from "judge --all" over each behavioral case's checks. A
+// skill whose cases carry none -- and whose "expected" text yields none either -- has no
+// base available, and today that is silent: the deterministic score assumes a perfect
+// base, so a skill nothing can score reads exactly like one that scored perfectly.
+//
+// Reported, never penalised, following dims 4 and 9: the absence is in the test prompts
+// rather than in the skill, so docking the skill would price someone else's unfinished
+// work. It is also not a category error the way a decision skill's missing failure branch
+// is -- see the note on checkFailure. Every skill has outputs worth checking; these
+// prompts just do not say what a good one contains yet.
+//
+// It asks testprompts.ChecksFor, which is the same call "judge --all" makes, so this
+// cannot report a case scorable that judge would then skip.
+func checkScorable(s *skill.Skill, ds *DimScore) {
+	f, err := testprompts.Load(filepath.Join(s.Dir, "test-prompts.json"))
+	if err != nil {
+		ds.Flags = append(ds.Flags, "no readable test-prompts.json; dim 8 cannot be scored")
+		return
+	}
+	behavioral := f.Behavioral()
+	scorable := 0
+	for i := range behavioral {
+		if checks, _ := testprompts.ChecksFor(&behavioral[i]); len(checks) > 0 {
+			scorable++
+		}
+	}
+	switch {
+	case len(behavioral) == 0:
+		ds.Flags = append(ds.Flags, "no behavioral test cases; dim 8 cannot be scored")
+	case scorable == 0:
+		ds.Flags = append(ds.Flags,
+			"none of "+strconv.Itoa(len(behavioral))+" behavioral case(s) specify checks; "+
+				"dim 8 cannot be scored until they do")
+	case scorable < len(behavioral):
+		ds.Flags = append(ds.Flags, strconv.Itoa(scorable)+" of "+
+			strconv.Itoa(len(behavioral))+" behavioral case(s) specify checks; "+
+			"a base over part of a skill's cases is not comparable with one over all of them")
+	default:
+		ds.Flags = append(ds.Flags,
+			"all "+strconv.Itoa(len(behavioral))+" behavioral case(s) specify checks")
+	}
 }
 
 func deriveCheckpoint(doc *markdown.Doc, cfg *Config, ds *DimScore) {
