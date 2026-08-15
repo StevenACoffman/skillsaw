@@ -708,3 +708,86 @@ toolkit) for reusable techniques.
       already more rigorous than unified-thinking's binary exact/contains/tolerance
       evaluators — nothing to adopt there. Calibration is the one real gap; its keyword
       bias/fallacy detectors are the "instruct, don't enforce" shape skillsaw rejects.
+
+## Agent-Red Survey (2026-08-15)
+
+Source: a survey of `~/Documents/agent-red` (26 agent-tooling projects). The one
+substantial finding for skillsaw is a single project's treatment of its own rubric, checked
+against `AgentLint/standards/` rather than its README.
+
+- [ ] **Make the rubric data, not a Go table.** `rubric.Dimensions()`
+  (`internal/rubric/rubric.go:111`) hardcodes the nine weights, and their provenance is a
+  code comment — "the reconciled table from spec D1 (dim6 = 5) so the nine weights sum to
+  exactly 100". The invariant is asserted in prose and the warrant for each weight is
+  unrecorded. `AgentLint` splits the same job across three files joined on a check ID:
+  - `standards/weights.json` — dimension weights *and* per-check weights (`"S6": 3` —
+    hardcoded secrets, weighted highest because most dangerous, said in a `note`).
+  - `standards/reference-thresholds.json` — every threshold with the empirical basis that
+    produced it, e.g. `"IMPORTANT": {"reference": 4, "source": "Anthropic 265 versions:
+    12→4"}`.
+  - `standards/evidence.json` — 58 check entries, each `{dimension, name, scope, fix_type,
+    evidence_sources, evidence_text}`, over a `sources` registry that **grades its own
+    citations** `primary-data` / `peer-reviewed` / `case-study` / `industry-practice` and
+    annotates the weak one honestly: *"n=1 case study, useful reference point not universal
+    benchmark"*.
+  This is the manifesto's stated requirement — maintain local decisions about how to
+  prioritize and trade off, *with provenance* — already implemented. A weight change
+  becomes a reviewable diff carrying its own justification instead of an edit to a literal.
+  **Determinism is unaffected:** the table is loaded, not computed, and `identity.Hash`
+  over the standards files pins which rubric produced a score.
+- [ ] **Their thresholds file states our charter better than we state it.** Its header
+  reads: *"Reference values from empirical data. NOT enforced thresholds — AgentLint
+  measures and compares, users decide."* That is canonizer's findings-not-scores rule,
+  applied to thresholds, in the file the thresholds live in. Worth copying verbatim as the
+  first key of whatever we externalize, because the file is where the temptation to harden
+  a reference into a gate will actually arise.
+- [ ] **Externalizing weights is how you find the bug.** `weights.json` carries a note
+  recording that its dimension weights deliberately sum to **1.10**, not 1.0, because
+  `D1-D3` and `SS1-SS4` "were previously emitted by deep-/session-analyzer but silently
+  dropped because no dimension owned them" — a coverage defect that only became visible
+  once the weights were data laid out beside the check IDs. Ours sum to exactly 100 and the
+  property is checked by a test, which is stronger; but nothing checks that every
+  *deterministic penalty* skillsaw computes is owned by some dimension. That is the same
+  class of defect and it is worth a test either way.
+- [x] **Certainty is computed but not mapped to an action.** DONE 2026-08-15 on skillet
+  v0.16.0. `Diagnosis` carries `finding.Action` — the shared vocabulary, not a local string,
+  which is why the axis went into skillet rather than into canonizer and here separately.
+  A fixed table, no measurement: dims 1/4/6 are `guided` (a tool can propose a shorter
+  description, a checkpoint marker, a link target; only a person knows it still says what
+  the skill does), and 2/3/5/7/8/9 plus P0 runtime drift are `human`.
+  **Nothing is `automatic`, and that is a finding rather than an omission.** Every defect
+  skillsaw reports is closed by editing prose whose correctness depends on what the skill
+  means. canonizer reached the same conclusion independently over a different artifact,
+  which is mild evidence the vocabulary is right: `automatic` earns its place as the option
+  neither tool takes.
+  **Orthogonal to `Priority`, and neither is derived from the other** — a P0 runtime hit
+  needs a person, and a P3 frontmatter cap does not become automatable by being unimportant.
+  Unset where there is no target (nothing scored, or every dimension healthy): naming an
+  actor to fix nothing would be a false instruction, the same reason `finding` has no
+  `ActionUnknown`.
+  `edit.AgainstOriginal`'s two defects are `human` too. **The `speclint`/`redlines`
+  diagnostics `preflight` composes are deliberately left unclassified** — they are skillet's
+  checks, and setting this repo's judgement on another package's output would drift the
+  moment skillet classified them itself.
+  No score moved: 0 of 233.
+  Original entry: `eval` already separates
+  `DET.SCORE` (deterministic lower bound) from `FULL`, and names the `NEEDS-JUDGE`
+  dimensions — a real certainty distinction, and a better one than a label. What `diagnose`
+  does not say is *who acts*: `agentsys` grades every finding HIGH / MEDIUM / LOW meaning
+  "safe to auto-fix" / "needs context" / "needs human judgment" (derived from testing over
+  1,000+ repos), and `AgentLint` carries `fix_type` (`guided` / `assisted`) per check. Since
+  `skillsaw-skill` drives the hill-climbing loop and picks one edit per round, "is this
+  finding safe to apply unattended" is a decision the loop is currently making implicitly.
+  Cheap: a fixed classification per check, no new measurement.
+- [ ] **Lower priority — a guard the optimizer cannot rewrite.** `gate` runs keep-or-revert
+  for skill self-improvement. `4x` pairs its self-evolution loop with a value gate carrying
+  explicit anti-hack checks and a self-modification scope guard. The analogous question
+  here: nothing structurally prevents an edit to the rubric that raises every score, since
+  the gate and the thing being gated live in one repo. Externalizing the rubric (first item)
+  makes this checkable — hash-pin the standards file in the ratchet's audit row so a score
+  improvement accompanied by a rubric change is visible rather than inferred.
+- Deliberately NOT adopted: `Graft`'s benchmark framing is methodologically right (162 runs
+  where only the context differs) but it measures agent task outcomes, which is `adh`'s
+  axis, not skillsaw's — skillsaw scores artifacts and already has `calibrate` plus the
+  activation confusion matrix for its own accuracy. Nothing in the survey improves on
+  those.
