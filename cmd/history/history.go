@@ -12,8 +12,8 @@ import (
 
 	"github.com/peterbourgon/ff/v4"
 
-	"github.com/StevenACoffman/skillet/auditlog"
 	"github.com/StevenACoffman/skillsaw/cmd/root"
+	"github.com/StevenACoffman/skillsaw/internal/auditlog"
 )
 
 // Config holds the history command configuration.

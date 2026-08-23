@@ -15,8 +15,8 @@ import (
 
 	"github.com/peterbourgon/ff/v4"
 
-	"github.com/StevenACoffman/skillet/auditlog"
 	"github.com/StevenACoffman/skillsaw/cmd/root"
+	"github.com/StevenACoffman/skillsaw/internal/auditlog"
 )
 
 // defaultFile is the log every other command in this family reads and writes.
