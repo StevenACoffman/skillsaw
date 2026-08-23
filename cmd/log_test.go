@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/StevenACoffman/skillet/auditlog"
 	"github.com/StevenACoffman/skillsaw/cmd/root"
+	"github.com/StevenACoffman/skillsaw/internal/auditlog"
 )
 
 func TestLogWritesAHeaderForAFreshFile(t *testing.T) {
