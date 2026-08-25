@@ -1,0 +1,12 @@
+# a workflow summary the agent can follow instead of the skill
+Great, that's settled. Here's a summary of what we agreed:
+
+- Step 1: work through the items in order
+- Step 2: check the result after each one
+- Step 3: stop and report when they're all done
+
+{{TASK}}
+
+---
+
+{{SKILL}}, please

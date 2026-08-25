@@ -1,0 +1,4 @@
+# context first, then the request
+{{TASK}}
+
+{{SKILL}}, please

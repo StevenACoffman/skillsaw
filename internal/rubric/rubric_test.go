@@ -4,6 +4,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -664,5 +665,218 @@ func TestDiagnosisLeavesActionUnsetWithNoTarget(t *testing.T) {
 	}
 	if d.Action != "" {
 		t.Errorf("Action = %q with no target; it must stay unset", d.Action)
+	}
+}
+
+// TestDimensionResponseIsTotal guards the classification against rotting rather than
+// restating the table, which would test nothing. What can go wrong is a tenth dimension
+// arriving unclassified, and the zero value exists so that reads as unclassified rather
+// than as neutral.
+func TestDimensionResponseIsTotal(t *testing.T) {
+	t.Parallel()
+	dims := rubric.Dimensions()
+	if len(dims) == 0 {
+		t.Fatal("no dimensions")
+	}
+	seen := map[rubric.Response]int{}
+	for _, d := range dims {
+		if !d.Response.Valid() {
+			t.Errorf("dim %d (%s) has response %q, which is not a classified direction",
+				d.Num, d.Key, d.Response)
+		}
+		seen[d.Response]++
+	}
+	if seen[rubric.ResponseNeutral] == len(dims) {
+		t.Error(
+			"every dimension is neutral; the classification has rotted and distinguishes nothing",
+		)
+	}
+}
+
+// TestDimensionResponseMatchesBehaviour binds the table to what the scorer actually does:
+// feed a dimension the thing it counts and the score must move the way the table claims.
+// The first version of this table guessed dim 4 was additive; this test refuted it, which
+// is the reason the field is measured rather than declared.
+func TestDimensionResponseMatchesBehaviour(t *testing.T) {
+	t.Parallel()
+	for name, tc := range map[string]struct {
+		bare, fed string
+		dim       int
+		want      rubric.Response
+	}{
+		"dim 3 gains a failure branch": {
+			bare: "# S\n\n```sh\nrun\n```\n",
+			fed:  "# S\n\n```sh\nrun\n```\n\nIf the run fails, retry once.\n",
+			dim:  3, want: rubric.ResponseAdditive,
+		},
+		"dim 4 gains checkpoint markers": {
+			bare: "# S\n\n```sh\nrun\n```\n",
+			fed:  "# S\n\n```sh\nrun\n```\n\n\u26a0\ufe0f a\n\n\u26a0\ufe0f b\n\n\u26a0\ufe0f c\n",
+			dim:  4, want: rubric.ResponseSubtractive,
+		},
+		"dim 9 gains a counter-example section": {
+			bare: "# S\n\ndo it.\n",
+			fed:  "# S\n\ndo it.\n\n## Common Mistakes\n\n- a\n- b\n- c\n",
+			dim:  9, want: rubric.ResponseAdditive,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			before, after := scoreDim(t, tc.bare, tc.dim), scoreDim(t, tc.fed, tc.dim)
+			got := rubric.ResponseNeutral
+			switch {
+			case after > before:
+				got = rubric.ResponseAdditive
+			case after < before:
+				got = rubric.ResponseSubtractive
+			}
+			if got != tc.want {
+				t.Errorf("dim %d scored %d then %d, so it is %q; the table says %q",
+					tc.dim, before, after, got, tc.want)
+			}
+			if declared := responseOf(t, tc.dim); declared != tc.want {
+				t.Errorf("dim %d is declared %q; this test measured %q", tc.dim, declared, tc.want)
+			}
+		})
+	}
+}
+
+// responseOf returns a dimension's declared response.
+func responseOf(t *testing.T, num int) rubric.Response {
+	t.Helper()
+	for _, d := range rubric.Dimensions() {
+		if d.Num == num {
+			return d.Response
+		}
+	}
+	t.Fatalf("dimension %d not in the table", num)
+	return rubric.ResponseUnclassified
+}
+
+// scoreDim evaluates a body and returns one dimension's final score.
+func scoreDim(t *testing.T, body string, num int) int {
+	t.Helper()
+	ev := rubric.Evaluate(&skill.Skill{Body: body, Dir: t.TempDir()}, rubric.DefaultConfig())
+	for i := range ev.Dims {
+		if ev.Dims[i].Num == num {
+			return ev.Dims[i].Final
+		}
+	}
+	t.Fatalf("dimension %d not scored", num)
+	return 0
+}
+
+// TestEveryDimensionIsScoredEveryTime pins the property L956 asked after: no dimension is
+// skipped and none is carried over. It is true today because Evaluate is pure and iterates
+// the whole table, but "true today" is not the same as "guarded" -- a skip path added for
+// speed would leave the earlier iteration's score standing, and a hill-climbing loop reads
+// the weakest dimension, so a stale one would keep sending it at a defect it already fixed.
+func TestEveryDimensionIsScoredEveryTime(t *testing.T) {
+	t.Parallel()
+	cfg := rubric.DefaultConfig()
+	desc := "Use when the demo thing is needed."
+	weak := mkSkill(t, "alpha", desc, "## Workflow\n\nrun the thing\n", nil)
+
+	ev := rubric.Evaluate(weak, cfg)
+	if len(ev.Dims) != len(rubric.Dimensions()) {
+		t.Fatalf("scored %d dimensions, the table has %d", len(ev.Dims), len(rubric.Dimensions()))
+	}
+	seen := map[int]bool{}
+	for _, ds := range ev.Dims {
+		if seen[ds.Num] {
+			t.Errorf("dimension %d scored twice", ds.Num)
+		}
+		seen[ds.Num] = true
+	}
+	for _, d := range rubric.Dimensions() {
+		if !seen[d.Num] {
+			t.Errorf("dimension %d (%s) was not scored", d.Num, d.Key)
+		}
+	}
+
+	// Re-scoring an edited skill must move the dimension the edit touched. If any score
+	// were reused across evaluations this is where it would show.
+	strong := mkSkill(t, "alpha", desc, "## Workflow\n\nrun the thing\n\n"+blacklist, nil)
+	after := rubric.Evaluate(strong, cfg)
+	if before, now := finalOf(ev, 9), finalOf(after, 9); now <= before {
+		t.Errorf("dim 9 scored %d before the blacklist and %d after; the edit was not re-scored",
+			before, now)
+	}
+}
+
+// finalOf returns the final score recorded for one dimension of an evaluation, or -1 when
+// the evaluation has no such dimension -- which the caller reports rather than skips.
+func finalOf(ev *rubric.Evaluation, num int) int {
+	for i := range ev.Dims {
+		if ev.Dims[i].Num == num {
+			return ev.Dims[i].Final
+		}
+	}
+	return -1
+}
+
+// TestEachCheckWritesOnlyItsOwnDimension guards the one place in this package where a
+// one-character edit silently moves a score: the `switch num` in applyChecks. A check is
+// handed the DimScore of whichever dimension dispatched it, so a penalty can never be
+// orphaned -- but an arm under the wrong number puts one dimension's finding on another's
+// score, and every other test here would still pass, because they assert on the dimension
+// they happen to look at.
+//
+// The map is the declaration: a dimension is deterministic or it is judge-only, and the
+// code has to agree. Dim 2 is judge-only by design ("judged outright" in the Dimensions
+// comment); adding a check for it without adding a fixture fails here rather than passing
+// unnoticed.
+func TestEachCheckWritesOnlyItsOwnDimension(t *testing.T) {
+	t.Parallel()
+	// Each fixture is built to trip exactly the dimension it is filed under. The body is
+	// the trigger; frontmatter stays well-formed unless dim 1 is the subject.
+	fixtures := map[int]struct{ name, desc, body string }{
+		1: {"", "does x, use when y", "b"},
+		3: {"ok-skill", "d", "Step 1: do it\n\n```sh\nrun --it\n```\n"},
+		4: {"ok-skill", "d", markers + "\n" + markers + "\n" + markers + "\n"},
+		5: {"ok-skill", "d", "建议这样 可以考虑那样 视情况而定"},
+		6: {"ok-skill", "d", "see [ref](references/missing.md) for details"},
+		7: {"ok-skill", "d", "说白了 换句话说 综上"},
+		8: {"ok-skill", "d", "b"},
+		9: {"ok-skill", "d", "only positive guidance here"},
+	}
+	// Judge-only dimensions have no deterministic check and must never carry a finding,
+	// on any input. Keeping this as a derived set means the two cannot disagree.
+	judgeOnly := map[int]bool{}
+	for _, d := range rubric.Dimensions() {
+		if _, checked := fixtures[d.Num]; !checked {
+			judgeOnly[d.Num] = true
+		}
+	}
+	if len(judgeOnly) != 1 || !judgeOnly[2] {
+		t.Fatalf("judge-only set is %v, want exactly {2}; a dimension gained or lost a check",
+			judgeOnly)
+	}
+
+	for num, f := range fixtures {
+		t.Run(strconv.Itoa(num), func(t *testing.T) {
+			t.Parallel()
+			ev := rubric.Evaluate(
+				mkSkill(t, f.name, f.desc, f.body, nil), rubric.DefaultConfig())
+			assertFindingsLandOn(t, ev, num, judgeOnly)
+		})
+	}
+}
+
+// assertFindingsLandOn checks that the dimension a fixture targets recorded something and
+// that no judge-only dimension did. Both halves are needed: the first catches a check that
+// stopped being dispatched, the second catches one dispatched under the wrong number.
+func assertFindingsLandOn(t *testing.T, ev *rubric.Evaluation, target int, judgeOnly map[int]bool) {
+	t.Helper()
+	for i := range ev.Dims {
+		ds := &ev.Dims[i]
+		switch {
+		case ds.Num == target && len(ds.Flags) == 0:
+			t.Errorf("dim %d records nothing for a fixture built to trip it; "+
+				"its check is not dispatched", target)
+		case judgeOnly[ds.Num] && len(ds.Flags) > 0:
+			t.Errorf("dim %d is judge-only but recorded %v; a check is dispatched "+
+				"under the wrong number", ds.Num, ds.Flags)
+		}
 	}
 }

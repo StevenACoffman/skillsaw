@@ -27,7 +27,10 @@ import (
 	"github.com/StevenACoffman/skillsaw/cmd/history"
 	"github.com/StevenACoffman/skillsaw/cmd/judge"
 	skillsawlog "github.com/StevenACoffman/skillsaw/cmd/log"
+	"github.com/StevenACoffman/skillsaw/cmd/ordering"
+	"github.com/StevenACoffman/skillsaw/cmd/portable"
 	"github.com/StevenACoffman/skillsaw/cmd/preflight"
+	"github.com/StevenACoffman/skillsaw/cmd/regression"
 	"github.com/StevenACoffman/skillsaw/cmd/root"
 	"github.com/StevenACoffman/skillsaw/cmd/scan"
 	"github.com/StevenACoffman/skillsaw/cmd/scores"
@@ -53,6 +56,9 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	hash.New(r)
 	gate.New(r)
 	history.New(r)
+	ordering.New(r)
+	portable.New(r)
+	regression.New(r)
 	judge.New(r)
 	preflight.New(r)
 	calibrate.New(r)

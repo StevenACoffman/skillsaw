@@ -78,6 +78,9 @@ type allReport struct {
 	Cases    []caseScore `json:"cases"`
 	MeanSoft float64     `json:"mean_soft"`
 	Base     int         `json:"base"`
+	BaseLow  int         `json:"base_low"`
+	BaseHigh int         `json:"base_high"`
+	Resolved bool        `json:"resolved"`
 }
 
 // Config holds the judge command configuration.
@@ -303,6 +306,7 @@ func (cfg *Config) scoreAll() error {
 	}
 	agg := scores.Aggregated(softs)
 	rep.MeanSoft, rep.Base = agg.MeanSoft, agg.Base
+	rep.BaseLow, rep.BaseHigh, rep.Resolved = agg.BaseLow, agg.BaseHigh, agg.Resolved()
 	return cfg.emitAll(&rep)
 }
 
@@ -338,5 +342,14 @@ func (cfg *Config) emitAll(rep *allReport) error {
 	}
 	_, _ = fmt.Fprintf(cfg.Stdout, "%d case(s), mean soft %.3f, base %d\n",
 		len(rep.Cases), rep.MeanSoft, rep.Base)
+	if !rep.Resolved {
+		// Said plainly rather than as a footnote on the number: a base copied into a
+		// scores file is applied as if it were measured, and nothing downstream can tell
+		// that this sample could not separate it from its neighbours.
+		_, _ = fmt.Fprintf(cfg.Stdout,
+			"  unresolved: %d case(s) support base %d-%d; score more cases before "+
+				"treating %d as measured\n",
+			len(rep.Cases), rep.BaseLow, rep.BaseHigh, rep.Base)
+	}
 	return nil
 }

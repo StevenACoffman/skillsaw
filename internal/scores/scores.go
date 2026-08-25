@@ -15,6 +15,8 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+
+	"github.com/StevenACoffman/skillsaw/internal/noise"
 )
 
 // MinBase and MaxBase bound a judged dimension base.
@@ -27,10 +29,19 @@ const (
 const MaxDimension = 9
 
 // Aggregate summarises a set of per-case soft scores as one dimension base.
+//
+// Base is a point estimate and BaseLow..BaseHigh is the range the sample actually
+// supports. They are reported together because rounding a mean to an integer hides how
+// little a handful of cases pins it: three cases agreeing exactly still leave most of the
+// scale open, and a Base read on its own looks like a measurement rather than a guess.
+// Resolved() is the question a caller should ask before treating Base as one number.
 type Aggregate struct {
-	Cases    int     // how many cases went into it
-	MeanSoft float64 // the mean of their soft scores, in [0,1]
-	Base     int     // that mean on the rubric's MinBase..MaxBase scale
+	Cases    int        // how many cases went into it
+	MeanSoft float64    // the mean of their soft scores, in [0,1]
+	Base     int        // that mean on the rubric's MinBase..MaxBase scale
+	Interval [2]float64 // conservative 95% interval on MeanSoft
+	BaseLow  int        // Interval's lower end on the MinBase..MaxBase scale
+	BaseHigh int        // Interval's upper end on the same scale
 }
 
 // Entry is one skill version's bases: the numbers a reader assigned, and the content
@@ -39,6 +50,32 @@ type Entry struct {
 	Skill string      `json:"skill,omitempty"` // a label for reports; the hash is the key
 	Hash  string      `json:"hash"`
 	Bases map[int]int `json:"bases"`
+
+	// Baseline records what was observed with the skill *absent*.
+	//
+	// A skill written against a failure the model does not actually exhibit is pure
+	// context cost, and no rubric dimension can detect one: the document is about a
+	// real-sounding problem and is perfectly well-formed. The only thing that separates
+	// the two is having watched the model fail without it. That observation is evidence
+	// about a version, so it lives here beside the bases, hash-bound the same way.
+	//
+	// Empty means **unmeasured**, which is a third state beside pass and fail and not a
+	// synonym for either. It blocks nothing -- consistent with finding.Unexamined,
+	// noise.VerdictUnknown, and an unresolved base, all of which name a gap without
+	// pricing it.
+	Baseline string `json:"baseline,omitempty"`
+
+	// Rubric is the rubric edition these bases were assigned under.
+	//
+	// A base is a reader's answer to a question the rubric asked. Change what the
+	// rubric asks and the answer is to a different question, however unchanged the
+	// skill is -- so the edition binds a base to its rules exactly as Hash binds it to
+	// its text, and Bases refuses a mismatch the same way.
+	//
+	// Empty means **unknown**, not current. An entry written before editions existed
+	// cannot claim to match today's rules, and reading it as a match is the silent
+	// failure this field exists to stop.
+	Rubric string `json:"rubric,omitempty"`
 }
 
 // File is a parsed scores document.
@@ -51,6 +88,11 @@ type File struct {
 	// is handed, because there is no way to tell whether it belongs to that one.
 	Unbound map[int]int
 }
+
+// Resolved reports whether the sample pins the base to a single value. A false result is
+// not a failure: it says the cases scored are too few or too inconsistent to distinguish
+// the neighbouring bases, and the fix is more cases rather than a different skill.
+func (a *Aggregate) Resolved() bool { return a.Cases > 0 && a.BaseLow == a.BaseHigh }
 
 // Parse reads either shape of scores document.
 //
@@ -136,14 +178,22 @@ func Marshal(entries []Entry) ([]byte, error) {
 // apart would see an unexplained missing total in both.
 //
 // Ensures: bases is nil when stale is true; it is pure.
-func (f *File) Bases(skill, hash string) (bases map[int]int, stale bool) {
+func (f *File) Bases(skill, hash, edition string) (bases map[int]int, stale bool) {
 	if len(f.Unbound) > 0 {
 		return f.Unbound, false
 	}
 	for i := range f.Entries {
-		if f.Entries[i].Hash == hash {
-			return f.Entries[i].Bases, false
+		if f.Entries[i].Hash != hash {
+			continue
 		}
+		// Right text, wrong rules is as stale as wrong text. It routes to the same
+		// verdict deliberately: the caller already refuses stale bases and names both
+		// versions, and a second disposition for a second cause would need a second
+		// place that remembers to handle it.
+		if f.Entries[i].Rubric != edition {
+			return nil, true
+		}
+		return f.Entries[i].Bases, false
 	}
 	for i := range f.Entries {
 		if f.Entries[i].Skill != "" && f.Entries[i].Skill == skill {
@@ -151,6 +201,36 @@ func (f *File) Bases(skill, hash string) (bases map[int]int, stale bool) {
 		}
 	}
 	return nil, false
+}
+
+// Measured reports whether a no-guidance control was recorded for this exact content.
+//
+// It answers a different question from Bases, and the difference is the point: bases say
+// how good the skill is, this says whether anyone established there was a problem to solve.
+// A skill can be well scored and unmeasured, and that combination is the one worth naming.
+//
+// Requires: hash identifies the version being asked about.
+// Ensures:  false for a legacy unbound document, which records no hash and therefore
+// cannot claim an observation belongs to any particular version.
+func (f *File) Measured(hash string) bool {
+	for i := range f.Entries {
+		if f.Entries[i].Hash == hash {
+			return f.Entries[i].Baseline != ""
+		}
+	}
+	return false
+}
+
+// RubricAt returns the rubric edition this skill was last judged under, or "" for an entry
+// written before editions existed. Like JudgedAt, it is for naming both sides of a stale
+// verdict rather than for deciding one.
+func (f *File) RubricAt(skill string) string {
+	for i := range f.Entries {
+		if f.Entries[i].Skill == skill {
+			return f.Entries[i].Rubric
+		}
+	}
+	return ""
 }
 
 // JudgedAt returns the hash this skill was last judged against, for a message that can
@@ -169,9 +249,11 @@ func parseEntries(raw []json.RawMessage) (*File, error) {
 	entries := make([]Entry, 0, len(raw))
 	for i, r := range raw {
 		var e struct {
-			Skill string          `json:"skill"`
-			Hash  string          `json:"hash"`
-			Bases json.RawMessage `json:"bases"`
+			Skill    string          `json:"skill"`
+			Hash     string          `json:"hash"`
+			Bases    json.RawMessage `json:"bases"`
+			Baseline string          `json:"baseline"`
+			Rubric   string          `json:"rubric"`
 		}
 		if err := json.Unmarshal(r, &e); err != nil {
 			return nil, fmt.Errorf("parse scores: entry %d: %w", i+1, err)
@@ -185,7 +267,10 @@ func parseEntries(raw []json.RawMessage) (*File, error) {
 		if err != nil {
 			return nil, fmt.Errorf("entry %d: %w", i+1, err)
 		}
-		entries = append(entries, Entry{Skill: e.Skill, Hash: e.Hash, Bases: bases})
+		entries = append(entries, Entry{
+			Skill: e.Skill, Hash: e.Hash, Bases: bases,
+			Baseline: e.Baseline, Rubric: e.Rubric,
+		})
 	}
 	return &File{Entries: entries}, nil
 }
@@ -239,12 +324,25 @@ func Aggregated(softs []float64) Aggregate {
 		sum += s
 	}
 	mean := sum / float64(len(softs))
-	base := int(math.Round(mean * float64(MaxBase)))
+	iv := noise.MeanInterval(softs)
+	return Aggregate{
+		Cases:    len(softs),
+		MeanSoft: mean,
+		Base:     baseOf(mean),
+		Interval: iv,
+		BaseLow:  baseOf(iv[0]),
+		BaseHigh: baseOf(iv[1]),
+	}
+}
+
+// baseOf maps a soft score in [0,1] onto the rubric's base scale.
+func baseOf(soft float64) int {
+	base := int(math.Round(soft * float64(MaxBase)))
 	if base < MinBase {
-		base = MinBase
+		return MinBase
 	}
 	if base > MaxBase {
-		base = MaxBase
+		return MaxBase
 	}
-	return Aggregate{Cases: len(softs), MeanSoft: mean, Base: base}
+	return base
 }

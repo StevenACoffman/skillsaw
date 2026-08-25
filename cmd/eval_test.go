@@ -23,6 +23,18 @@ func allBases(v int) map[string]int {
 }
 
 // writeScores marshals a scores document to a fresh file.
+// rubricEdition asks the CLI which rules are in force, the same way a caller writing a
+// scores file has to. Deriving it any other way here would let the fixture agree with a
+// broken implementation.
+func rubricEdition(t *testing.T) string {
+	t.Helper()
+	out, err := run(t, "hash", "--rubric")
+	if err != nil {
+		t.Fatalf("hash --rubric: %v", err)
+	}
+	return strings.TrimSpace(out)
+}
+
 func writeScores(t *testing.T, doc any) string {
 	t.Helper()
 	b, err := json.Marshal(doc)
@@ -80,8 +92,18 @@ func TestEvalGivesEachSkillItsOwnBases(t *testing.T) {
 	tree := makeTree(t, "alpha", "beta")
 	alpha, beta := filepath.Join(tree, "alpha"), filepath.Join(tree, "beta")
 	path := writeScores(t, map[string]any{"entries": []any{
-		map[string]any{"skill": "alpha", "hash": hashOf(t, alpha), "bases": allBases(10)},
-		map[string]any{"skill": "beta", "hash": hashOf(t, beta), "bases": allBases(2)},
+		map[string]any{
+			"skill":  "alpha",
+			"hash":   hashOf(t, alpha),
+			"bases":  allBases(10),
+			"rubric": rubricEdition(t),
+		},
+		map[string]any{
+			"skill":  "beta",
+			"hash":   hashOf(t, beta),
+			"bases":  allBases(2),
+			"rubric": rubricEdition(t),
+		},
 	}})
 	out, err := run(t, "eval", "--scores", path, alpha, beta)
 	if err != nil {
@@ -104,7 +126,12 @@ func TestEvalRefusesBasesJudgedAgainstAnotherVersion(t *testing.T) {
 	tree := makeTree(t, "alpha")
 	dir := filepath.Join(tree, "alpha")
 	path := writeScores(t, map[string]any{"entries": []any{
-		map[string]any{"skill": "alpha", "hash": hashOf(t, dir), "bases": allBases(10)},
+		map[string]any{
+			"skill":  "alpha",
+			"hash":   hashOf(t, dir),
+			"bases":  allBases(10),
+			"rubric": rubricEdition(t),
+		},
 	}})
 	if out, err := run(t, "eval", "--scores", path, dir); err != nil {
 		t.Fatalf("a matching hash should score: %v\n%s", err, out)
@@ -141,8 +168,18 @@ func TestEvalScoresEveryOtherSkillBesideAStaleOne(t *testing.T) {
 	tree := makeTree(t, "alpha", "beta")
 	alpha, beta := filepath.Join(tree, "alpha"), filepath.Join(tree, "beta")
 	path := writeScores(t, map[string]any{"entries": []any{
-		map[string]any{"skill": "alpha", "hash": "stale-hash", "bases": allBases(10)},
-		map[string]any{"skill": "beta", "hash": hashOf(t, beta), "bases": allBases(9)},
+		map[string]any{
+			"skill":  "alpha",
+			"hash":   "stale-hash",
+			"bases":  allBases(10),
+			"rubric": rubricEdition(t),
+		},
+		map[string]any{
+			"skill":  "beta",
+			"hash":   hashOf(t, beta),
+			"bases":  allBases(9),
+			"rubric": rubricEdition(t),
+		},
 	}})
 	out, err := run(t, "eval", "--scores", path, alpha, beta)
 	if err == nil {
@@ -165,5 +202,33 @@ func TestEvalWithoutScoresIsUnchanged(t *testing.T) {
 	}
 	if got := fullOf(out, "alpha"); got != "-" {
 		t.Errorf("no bases should mean no FULL total, got %q:\n%s", got, out)
+	}
+}
+
+// TestEvalRefusesBasesJudgedUnderAnotherRubric is the edition half of the staleness rule,
+// through the real CLI. The skill is untouched and its hash matches; only the rules the
+// bases answered to have changed. Without this the run returns a full total computed from
+// yesterday's grades under today's rubric, and says nothing about having done so.
+func TestEvalRefusesBasesJudgedUnderAnotherRubric(t *testing.T) {
+	t.Parallel()
+	dir := makeTree(t, "alpha") + "/alpha"
+	path := writeScores(t, map[string]any{"entries": []any{
+		map[string]any{
+			"skill": "alpha", "hash": hashOf(t, dir),
+			"bases": allBases(10), "rubric": "some-earlier-edition",
+		},
+	}})
+	out, err := run(t, "eval", "--scores", path, dir)
+	if err == nil {
+		t.Fatalf("bases from another rubric were applied:\n%s", out)
+	}
+	for _, want := range []string{"under rubric some-earlier-edition", "re-judge it"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the message does not say %q, so the reader cannot tell which "+
+				"rules produced the old number:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "FULL") && !strings.Contains(out, "-") {
+		t.Errorf("a full total was reported anyway:\n%s", out)
 	}
 }

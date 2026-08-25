@@ -153,14 +153,26 @@ func (cfg *Config) gather(dirs []string, judged *scores.File) ([]*rubric.Evaluat
 			name = filepath.Base(dir)
 		}
 		hash := s.Hash()
-		bases, wasStale := judged.Bases(name, hash)
+		bases, wasStale := judged.Bases(name, hash, rubric.Edition())
+		if len(bases) > 0 && !judged.Measured(hash) {
+			// Advisory, and separate from the stale count: a stale entry is a wrong
+			// number, this is a missing observation. Naming it costs nothing and is the
+			// only warning a skill written against a failure the model never exhibits
+			// will ever get -- such a skill is well-formed by construction, so no
+			// dimension can see it.
+			_, _ = fmt.Fprintf(cfg.Stderr,
+				"%s: judged but unmeasured; no no-guidance control is recorded for %s, so "+
+					"nothing establishes the failure this skill addresses is one the model "+
+					"actually has\n", name, hash)
+		}
 		if wasStale {
 			stale++
 			// Name both versions: the reader has to know it is looking at an edit that
 			// outran its judgment, not at a skill nobody has scored yet.
 			_, _ = fmt.Fprintf(cfg.Stderr,
-				"%s: judged at %s but is now %s; re-judge it (its bases were not applied)\n",
-				name, judged.JudgedAt(name), hash)
+				"%s: judged at %s under rubric %s, but is now %s under rubric %s; "+
+					"re-judge it (its bases were not applied)\n",
+				name, judged.JudgedAt(name), judged.RubricAt(name), hash, rubric.Edition())
 		}
 		evals = append(evals, rubric.EvaluateWithBases(s, rcfg, bases))
 	}

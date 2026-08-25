@@ -1,0 +1,143 @@
+# Reference values from empirical data. NOT enforced thresholds — skillsaw measures and
+# compares, users decide.
+#
+# That line is copied from AgentLint's thresholds file and it belongs here rather than in a
+# README, because this file is where the temptation to harden a reference into a gate will
+# actually arise. A number below is what a corpus showed, not what a skill owes.
+#
+# A vendor's machine-readable contract and a vendor's prose advice are not the same thing,
+# and a dimension may encode only the first. The contract is what a runtime enforces —
+# frontmatter keys, the 1024-rune description cap — and skillet's speclint owns it. Prose
+# advice about how a skill ought to read is a style preference, and giving one the authority
+# of a score means an optimiser will restructure a working skill to satisfy it. Any
+# dimension added here has to say which of the two each of its checks comes from.
+#
+# Every weight and threshold carries the reason it has the value it has. A change to one is
+# a reviewable diff with its own justification attached, which is what a Go literal could
+# not give. Editing anything here changes the rubric edition, so grades cached under the
+# previous version stop being applied — see hash --rubric.
+
+[thresholds]
+# Only substantial marker usage is positive evidence of checkpoint discipline. Below this a
+# lone ⚠️ warning must not score worse than no markers at all, so the band defers to a
+# judge instead of docking.
+checkpoint_min_markers = 3
+# Substantial marker usage is evidence of discipline but not proof of good checkpoints, so
+# it derives 9 rather than 10 and leaves the last point to a judge.
+checkpoint_base = 9
+# Counter-example sections score in three bands. Measured over the 233-skill corpus: a
+# section with nothing under it is the common empty-container shape, and three concrete
+# items is where a boundary section starts constraining anything.
+blacklist_empty_base = 2
+blacklist_thin_base = 6
+blacklist_full_base = 9
+blacklist_full_units = 3
+
+# The nine weights are the reconciled table from spec D1 (dim6 = 5) and sum to exactly 100.
+# response is measured, not reasoned: it says which way a dimension's deterministic score
+# moves when fed more of what it counts. The first attempt guessed dim 4 additive and a test
+# refuted it.
+
+[[dimension]]
+num = 1
+key = "frontmatter"
+name = "Frontmatter quality"
+weight = 7
+needs_judge = true
+response = "neutral"
+note = "Low weight because a correct header is table stakes rather than evidence of quality. Mixes both kinds of check and the difference matters: the 1024-rune description cap is the vendor contract, enforced by speclint and not negotiable. The filler-tail and kebab-case checks are this project's house style, and are why the dimension is needs_judge rather than fully derived — a style preference must not be the last word on a score."
+
+[[dimension]]
+num = 2
+key = "workflow"
+name = "Workflow clarity"
+weight = 12
+needs_judge = true
+response = "neutral"
+note = "No deterministic check at all — judged outright. Whether steps are clear is not decidable from structure."
+
+[[dimension]]
+num = 3
+key = "failure"
+name = "Failure-mode encoding"
+weight = 12
+needs_judge = true
+response = "additive"
+note = "SkillLens dimension, 65-66% predictive of downstream utility. Additive: any branch removes the penalty, so an optimiser can feed it."
+
+[[dimension]]
+num = 4
+key = "checkpoint"
+name = "Checkpoint design"
+weight = 6
+needs_judge = false
+response = "subtractive"
+note = "Subtractive because a needs-judge dim with no derived base is assumed a perfect 10, so deriving one can only come down."
+
+[[dimension]]
+num = 5
+key = "specificity"
+name = "Actionable specificity"
+weight = 17
+needs_judge = true
+response = "neutral"
+note = "SkillLens dimension. Highest non-effectiveness weight: vague steps are the defect most often fatal in use."
+
+[[dimension]]
+num = 6
+key = "resources"
+name = "Resource integration"
+weight = 5
+needs_judge = false
+response = "neutral"
+note = "Fully derivable and caps out — a skill referencing nothing scores the same as one whose references all resolve."
+
+[[dimension]]
+num = 7
+key = "architecture"
+name = "Overall architecture"
+weight = 12
+needs_judge = true
+response = "neutral"
+note = "Scores by removal: the deterministic half only docks slop, so it is a lower bound on a judged base."
+
+[[dimension]]
+num = 8
+key = "effectiveness"
+name = "Real-world test performance"
+weight = 23
+needs_judge = true
+response = "neutral"
+note = "Heaviest weight, and nothing here measures it — the deterministic half only reports whether it is scorable. See EVIDENCE.md."
+
+[[dimension]]
+num = 9
+key = "blacklist"
+name = "Counter-examples / blacklist"
+weight = 6
+needs_judge = false
+response = "additive"
+note = "SkillLens dimension. Additive: the band counts units, so three rows of filler score as three real counter-examples."
+
+[lists]
+# dim1: a description that trails off into vagueness. Anchored at the end — the same words
+# mid-sentence are ordinary prose.
+filler_tails = [
+  "灵活应用", "根据情况判断", "视情况而定", "灵活把握",
+  "as appropriate", "use your judgment", "as needed",
+  "depending on context", "your mileage may vary",
+]
+# dim7: each occurrence costs a point. Covers both the Chinese darwin-source vocabulary and
+# English equivalents — a China-only list scores every English skill as defect-free.
+#
+# 首先 and 其次 are recorded in quiet.go as firing on ordinary step ordering. They are still
+# here because removing a term moves every score in the corpus and no corpus is at hand to
+# measure by how much.
+slop = [
+  "说白了", "换句话说", "综上", "首先", "其次",
+  "in other words", "that said", "at the end of the day",
+  "needless to say", "it's worth noting", "simply put", "in essence",
+]
+# dim4: explicit visual markers. STOP and CHECKPOINT are recorded in quiet.go as firing on
+# ordinary infrastructure prose; a bare substring cannot tell a marker from a noun.
+checkpoint_markers = ["🔴", "🛑", "⚠️", "🚨", "🚦", "STOP", "CHECKPOINT", "HALT"]

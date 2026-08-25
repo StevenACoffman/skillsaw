@@ -1,0 +1,4 @@
+# the request phrased as an order to begin, not to load
+{{TASK}}
+
+Do {{SKILL}} on this — start on the first item and get going, then we'll review.

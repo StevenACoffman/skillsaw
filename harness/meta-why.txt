@@ -1,0 +1,14 @@
+# not one of the nine: asked after a failure, to find out which repair it wants
+You just worked on this, and you had the {{SKILL}} skill available:
+
+{{TASK}}
+
+Looking back at what you actually did: how should that skill have been written so that you
+would have loaded it and followed it before doing anything else?
+
+Answer in one of these three shapes, whichever is true — do not pick the flattering one:
+
+1. "The skill was clear. I chose to start working anyway." — say what pulled you into
+   acting first.
+2. "The skill should have said X." — quote X as you would want it written.
+3. "I didn't see section Y." — name the section and say where you expected it.

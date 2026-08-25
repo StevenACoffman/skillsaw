@@ -1,0 +1,6 @@
+# the request is one item among several, so the others may be serviced first
+A few things, whenever you get to them:
+
+- Check whether the config file still has the old timeout in it
+- {{SKILL}}, please — {{TASK}}
+- Remind me what we decided about the naming convention

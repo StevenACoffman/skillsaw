@@ -1,0 +1,4 @@
+# explicit pressure to skip preliminaries
+{{TASK}}
+
+{{SKILL}}, please. Don't waste time — just get straight into it and start immediately.

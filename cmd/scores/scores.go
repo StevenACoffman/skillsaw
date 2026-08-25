@@ -17,6 +17,7 @@ import (
 
 	"github.com/StevenACoffman/skillet/skill"
 	"github.com/StevenACoffman/skillsaw/cmd/root"
+	"github.com/StevenACoffman/skillsaw/internal/rubric"
 	scoreslib "github.com/StevenACoffman/skillsaw/internal/scores"
 )
 
@@ -90,8 +91,11 @@ func (cfg *Config) exec(_ context.Context, args []string) error {
 	if name == "" {
 		name = filepath.Base(cfg.Skill)
 	}
+	// The edition is recorded here for the same reason the hash is: a base answers the
+	// question the rubric asked, and eval refuses one whose rules no longer match. A
+	// writer that omitted it would emit a document its own reader rejects.
 	doc, err := scoreslib.Marshal([]scoreslib.Entry{
-		{Skill: name, Hash: s.Hash(), Bases: bases},
+		{Skill: name, Hash: s.Hash(), Bases: bases, Rubric: rubric.Edition()},
 	})
 	if err != nil {
 		return fmt.Errorf("scores: %w", err)
