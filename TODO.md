@@ -2568,71 +2568,88 @@ inverted verdict this file has produced in a week, and the first one caught befo
 shipped rather than after; `TestANewVerdictDoesNotRenderAsAPass` guards the shape rather
 than any one value, so the next `Order` added cannot repeat it.
 
-## The Orphan Gate, Sited Here (2026-08-27)
+## The Orphan Gate, Built (2026-08-27)
 
-Source: exegesis deferred this pending a siting question and the answer came back "not
-there". exegesis is snapshot-shaped — one `manifest.Build` call, **zero** `manifest.Diff` —
-and a regression-relative gate would cost it that property permanently for one check.
+Built and shipped as `skillsaw orphans`, with `internal/orphan` as the pure core. Both
+blockers cleared on the day: skillet v0.24.0 promoted `related`, and the baseline question
+below was answered by measuring rather than reasoning.
 
-- [ ] **Report what a change orphaned: a skill that lost its last inbound edge.**
-  `coherence`'s `OrphanEndpoints` meter (`internal/drift/drift.go:198`) is the shape:
-  `NewlyOrphanedEndpoints` **and** `NewlyCoveredEndpoints` — both directions, so the gate
-  is regression-relative rather than absolute — plus `BaseAvailable`, keeping *"no
-  baseline"* distinct from *"zero"* the way `timeseries.Verdict.Compared` does.
+**Baseline comes from a tree, not the manifest.** `changed` already carried `--tree`, so
+this is an additive `--base-tree` local to skillsaw — no kernel widening, no skillet
+release, and no consistency argument to win against exegesis's declined widening for
+origin-and-verdict. The decisive point is that both sides go through the same
+`related.ParseSection` at the same version: recording edges in the manifest would have made
+the manifest's notion of an edge a *snapshot* that can drift from the parser's across tool
+versions, at exactly the margins — fences, wrapped bullets — the source entry warned about.
 
-  **It belongs here because `Uncoupled` already solved its sub-problems**, not merely
-  because `changed` has a baseline. Two rules transfer unchanged from
-  `internal/edit/coupling.go`, and re-deriving them would be the whole risk:
-  - *"A location absent from the baseline is new and has nothing to be uncoupled from"* — a
-    skill absent from the baseline cannot be **newly** orphaned. Without this the first
-    corpus-wide run reports every pre-existing orphan as new.
-  - *"The result is advisory… a gate that fires on those teaches people to bypass it"* — an
-    intentional removal legitimately orphans something, so blocking is the caller's
-    decision taken by promoting the severity.
+*Correcting the source entry:* its parenthetical **"(or a hash of them)" cannot work.**
+"Newly orphaned" asks whether *any* skill had an outbound edge to X — a whole-graph
+question. A per-skill hash says only that skill Y's edge list changed, never which targets
+it dropped. It buys one thing: if no hash changed and nothing was removed, the graph is
+unchanged and nothing is newly orphaned. A fast path, not an answer. Anyone revisiting this
+must record full edges.
 
-  **Carry `Convention` across, and it is the most transferable part.** True only when the
-  current graph contains any edge of the kind being checked — proof the corpus actually
-  uses the pattern — and it skips the check when false. That is a **fifth** way to answer
-  "does this check apply here", and unlike the four the family already uses (a derived gate
-  in `redlines.checkTrigger`, a declared field in `skill.Lineage`, a manual `--check`
-  opt-in, an advisory severity) it is **derived from the corpus** rather than declared,
-  judged, or opted into. A repo that has never written a `verifies` edge is not failing the
-  convention; it has not adopted it.
+**Coverage is a tier, not a boolean, and that is the substance of the build.** The five
+kinds are not equally strong claims that a skill is still used:
 
-  Blocked on one prerequisite: **`related` must be promoted from exegesis to skillet**
-  (filed there). It is the only reader of the `## Related skills` graph and is currently
-  under exegesis's `internal/`. Do not fork it — a second implementation of "what is an
-  edge" would disagree at the margins over fences and wrapped bullets.
+```text
+depends-on 4 > composes-with 3 > informs 2 > contrasts-with 1 > superseded-by 0
+```
 
-  - [ ] **And blocked on a second decision the source entry did not surface: where the
-    baseline edge graph comes from.** Found 2026-08-27 while planning, by reading
-    `manifest.Skill` rather than trusting the siting argument.
+The ends are not in doubt. **3 over 2 is a judgement**, argued from skillet's own reasoning:
+`Informs` exists as a separate kind because `ComposesWith` *"would claim a symmetry 26 of
+the 38 do not have"*. Measured, `composes-with` is also load-bearing at 201 edges to
+`informs`' 38.
 
-    **`manifest.Skill` is `{slug, dir, sha256, test_prompts, test_prompts_hash}` — it
-    records no edges.** So `manifest.Diff(base, cur)` reports which skills changed and
-    never what the baseline's graph was, and "newly orphaned" splits into a half that is
-    computable and a half that is not:
+So an edit rewriting a `composes-with` as a `contrasts-with` leaves the skill covered while
+dropping a real use relationship, and a boolean gate cannot see it. Demonstrated end to end
+on two copies of the real corpus with one edge deleted and one demoted — both caught, and
+the demotion is the one a boolean gate would have missed.
 
-    | half                    | needs                     | available                                 |
-    | ----------------------- | ------------------------- | ----------------------------------------- |
-    | orphaned **now**        | the current tree          | yes, with `--tree` and promoted `related` |
-    | **not** orphaned before | the baseline's edge graph | **no**                                    |
+**Measured, and it settled two arguments.** 285 skills: 43 `depends-on`, 83
+`composes-with`, 12 `informs`, 12 `contrasts-with`, **135 with nothing pointing at them**.
 
-    An edge disappears when a skill is removed, or when a surviving skill's body drops a
-    bullet. The first is invisible because the skill is gone; the second because its old
-    body is. A hash says the body moved, not what it said.
+- *Which kinds count as inbound.* I had claimed `contrasts-with` was the pivotal choice and
+  would silence the gate. Wrong: including it moves 12 skills of 285. `composes-with` moves
+  78. The choice is about the symmetry artifact — `contrasts-with` is semantically symmetric
+  but recorded one-directionally, so excluding it makes coverage depend on which of two
+  authors wrote the bullet — not about the number.
+- *Whether the absolute half is shippable.* At 47% orphaned it is not a gate, and shipping
+  it as one is what the source entry rightly refused. It ships as `Survey`: a tier
+  distribution with `BaseAvailable=false`, exit 0, which is information about corpus shape
+  rather than a verdict.
 
-    Three options, none free:
-    - **The manifest records each skill's edges** (or a hash of them). Exact and cheap at
-      diff time; widens a kernel type that is deliberately identity-only — the same
-      widening exegesis declined for origin-and-verdict.
-    - **The caller supplies a baseline *tree*, not just a manifest.** No kernel change, and
-      the graph is read identically on both sides; costs `changed` a second tree argument,
-      and a tree is heavier to keep around than a manifest.
-    - **Ship the absolute half, labelled, with `BaseAvailable=false`.** Honest and useful
-      today — and it is exactly the check exegesis refused to site. Moving a weaker check
-      to a different tool does not answer the objection that it collapses the distinction.
+**`superseded-by`, two separate exclusions.** Never counts as inbound — its target is the
+*replacement*, which was never at risk. And a skill that is the **source** of one is
+suppressed from orphan reporting entirely: `merge-skills` keeps it as an audit trail, so its
+edges decaying is the expected end of that life. Zero such edges exist today; this
+forecloses a false-positive class rather than fixing one.
 
-    **Do not start the gate before this is answered.** Building against an unmade choice is
-    the failure recorded twice in adh's harvest line, and the promotion above is
-    independently justified, so there is useful work that does not wait on it.
+**`Convention` collapsed on contact, and that is worth recording.** The source entry carried
+it across as a fifth way to answer "does this check apply here" — true only when the corpus
+writes an edge of the kind being checked, skip otherwise. Worked through, the gate has
+nothing to do: a kind nobody writes produces no inbound edges, so it can never be a skill's
+strongest tier and nothing misfires. What survives is reporting — `Unadopted` names those
+kinds so a reader knows the ladder had fewer rungs. Re-deriving it as a gate would have been
+cargo.
+
+**Advisory, with the exit following the severity.** `finding.SeverityWarning` by default and
+exit 0, because an intentional removal legitimately orphans something and a gate that fires
+on those teaches bypassing. `--strict` promotes to `SeverityError` and the exit follows from
+that rather than from a second rule that could disagree with it — the failure shape that
+produces a green build over a red report.
+
+**Controls, both of which caught a real defect in the tests themselves.** Reversing the rank
+comparison fails the demotion row. Deleting the absent-from-baseline rule fails the new-skill
+row — but only after that row was fixed: as first written the new skill arrived *uncovered*,
+so `was == now` short-circuited before the rule was reached and the row passed with the rule
+deleted. A vacuous test that looked like coverage.
+
+- [ ] **Tiering makes one thing invisible: an outbound demotion by the pointing skill.**
+  `Weakened` compares the strongest inbound edge, so if two skills point at X with
+  `composes-with` and one demotes to `contrasts-with`, X's strongest is still
+  `composes-with` and nothing is reported. Correct by the current definition and arguably a
+  gap: the corpus lost a use relationship. Reporting it needs per-edge rather than
+  per-skill comparison, which is a bigger change than the tier was.
+- [ ] **Not wired into `gate` or `checks`.** Deliberate — it should be run against real
+  changes for a while before anything depends on it.
