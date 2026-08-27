@@ -2653,3 +2653,98 @@ deleted. A vacuous test that looked like coverage.
   per-skill comparison, which is a bigger change than the tier was.
 - [ ] **Not wired into `gate` or `checks`.** Deliberate — it should be run against real
   changes for a while before anything depends on it.
+
+## The Orphan Gate, Sited Here (2026-08-27)
+
+Source: exegesis deferred this pending a siting question and the answer came back "not
+there". exegesis is snapshot-shaped — one `manifest.Build` call, **zero** `manifest.Diff` —
+and a regression-relative gate would cost it that property permanently for one check.
+
+- [ ] **Report what a change orphaned: a skill that lost its last inbound edge.**
+  `coherence`'s `OrphanEndpoints` meter (`internal/drift/drift.go:198`) is the shape:
+  `NewlyOrphanedEndpoints` **and** `NewlyCoveredEndpoints` — both directions, so the gate
+  is regression-relative rather than absolute — plus `BaseAvailable`, keeping *"no
+  baseline"* distinct from *"zero"* the way `timeseries.Verdict.Compared` does.
+
+  **It belongs here because `Uncoupled` already solved its sub-problems**, not merely
+  because `changed` has a baseline. Two rules transfer unchanged from
+  `internal/edit/coupling.go`, and re-deriving them would be the whole risk:
+  - *"A location absent from the baseline is new and has nothing to be uncoupled from"* — a
+    skill absent from the baseline cannot be **newly** orphaned. Without this the first
+    corpus-wide run reports every pre-existing orphan as new.
+  - *"The result is advisory… a gate that fires on those teaches people to bypass it"* — an
+    intentional removal legitimately orphans something, so blocking is the caller's
+    decision taken by promoting the severity.
+
+  **Carry `Convention` across, and it is the most transferable part.** True only when the
+  current graph contains any edge of the kind being checked — proof the corpus actually
+  uses the pattern — and it skips the check when false. That is a **fifth** way to answer
+  "does this check apply here", and unlike the four the family already uses (a derived gate
+  in `redlines.checkTrigger`, a declared field in `skill.Lineage`, a manual `--check`
+  opt-in, an advisory severity) it is **derived from the corpus** rather than declared,
+  judged, or opted into. A repo that has never written a `verifies` edge is not failing the
+  convention; it has not adopted it.
+
+  Blocked on one prerequisite: **`related` must be promoted from exegesis to skillet**
+  (filed there). It is the only reader of the `## Related skills` graph and is currently
+  under exegesis's `internal/`. Do not fork it — a second implementation of "what is an
+  edge" would disagree at the margins over fences and wrapped bullets.
+
+  - [x] **And blocked on a second decision the source entry did not surface: where the
+    baseline edge graph comes from.** ANSWERED 2026-08-27 — **edge targets in the
+    manifest**, filed in skillet. Reasoning and this repo's half are below. Found 2026-08-27 while planning, by reading
+    `manifest.Skill` rather than trusting the siting argument.
+
+    **`manifest.Skill` is `{slug, dir, sha256, test_prompts, test_prompts_hash}` — it
+    records no edges.** So `manifest.Diff(base, cur)` reports which skills changed and
+    never what the baseline's graph was, and "newly orphaned" splits into a half that is
+    computable and a half that is not:
+
+    | half | needs | available |
+    | ---- | ----- | --------- |
+    | orphaned **now** | the current tree | yes, with `--tree` and promoted `related` |
+    | **not** orphaned before | the baseline's edge graph | **no** |
+
+    An edge disappears when a skill is removed, or when a surviving skill's body drops a
+    bullet. The first is invisible because the skill is gone; the second because its old
+    body is. A hash says the body moved, not what it said.
+
+    Three options, none free:
+    - **The manifest records each skill's edges** (or a hash of them). Exact and cheap at
+      diff time; widens a kernel type that is deliberately identity-only — the same
+      widening exegesis declined for origin-and-verdict.
+    - **The caller supplies a baseline *tree*, not just a manifest.** No kernel change, and
+      the graph is read identically on both sides; costs `changed` a second tree argument,
+      and a tree is heavier to keep around than a manifest.
+    - **Ship the absolute half, labelled, with `BaseAvailable=false`.** Honest and useful
+      today — and it is exactly the check exegesis refused to site. Moving a weaker check
+      to a different tool does not answer the objection that it collapses the distinction.
+
+    **Do not start the gate before this is answered.** Building against an unmade choice is
+    the failure recorded twice in adh's harvest line, and the promotion above is
+    independently justified, so there is useful work that does not wait on it.
+
+- [ ] **Populate `Skill.Edges` in `inventory`, and read it in the gate.** The baseline
+  decision (2026-08-27) is that `manifest.Skill` carries the edge *targets* a skill
+  declares; the kernel change is filed in skillet. This repo owes both halves.
+
+  **Producer.** `internal/inventory` calls `manifest.Build`, so it records targets via
+  `related.ParseSection` — reachable since `related` moved to skillet in v0.24.0. **It must
+  land in the same change as exegesis's `verify`**, the other producer: a field one tool
+  writes and the other does not is skew that surfaces as phantom diffs and gets diagnosed
+  as a gate bug rather than a producer gap.
+
+  **Consumer.** The gate computes newly-orphaned from base targets versus current ones,
+  keeping the two rules `Uncoupled` already established — absent from the baseline is new
+  and cannot be *newly* orphaned, and the result is advisory because an intentional removal
+  legitimately orphans something.
+
+  **`BaseAvailable` is derived, not declared.** Absent edges mean *unknown* (a manifest
+  written before the field existed); `[]` means known-to-declare-none. Collapse the two and
+  the first run against an old manifest reports every node as newly orphaned.
+
+  **Caveat carried from the decision: measure before trusting the output.** The readable
+  graph went from 222 to 357 edges on 2026-08-27 alone, and 44 display titles plus several
+  out-of-vocabulary kinds are still unread. An orphan count is only as good as the graph
+  beneath it. Report the count alongside how much of the corpus the reader could see, so
+  the two are never separated.
