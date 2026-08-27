@@ -2507,3 +2507,36 @@ and a regression-relative gate would cost it that property permanently for one c
   (filed there). It is the only reader of the `## Related skills` graph and is currently
   under exegesis's `internal/`. Do not fork it — a second implementation of "what is an
   edge" would disagree at the margins over fences and wrapped bullets.
+
+  - [ ] **And blocked on a second decision the source entry did not surface: where the
+    baseline edge graph comes from.** Found 2026-08-27 while planning, by reading
+    `manifest.Skill` rather than trusting the siting argument.
+
+    **`manifest.Skill` is `{slug, dir, sha256, test_prompts, test_prompts_hash}` — it
+    records no edges.** So `manifest.Diff(base, cur)` reports which skills changed and
+    never what the baseline's graph was, and "newly orphaned" splits into a half that is
+    computable and a half that is not:
+
+    | half | needs | available |
+    | ---- | ----- | --------- |
+    | orphaned **now** | the current tree | yes, with `--tree` and promoted `related` |
+    | **not** orphaned before | the baseline's edge graph | **no** |
+
+    An edge disappears when a skill is removed, or when a surviving skill's body drops a
+    bullet. The first is invisible because the skill is gone; the second because its old
+    body is. A hash says the body moved, not what it said.
+
+    Three options, none free:
+    - **The manifest records each skill's edges** (or a hash of them). Exact and cheap at
+      diff time; widens a kernel type that is deliberately identity-only — the same
+      widening exegesis declined for origin-and-verdict.
+    - **The caller supplies a baseline *tree*, not just a manifest.** No kernel change, and
+      the graph is read identically on both sides; costs `changed` a second tree argument,
+      and a tree is heavier to keep around than a manifest.
+    - **Ship the absolute half, labelled, with `BaseAvailable=false`.** Honest and useful
+      today — and it is exactly the check exegesis refused to site. Moving a weaker check
+      to a different tool does not answer the objection that it collapses the distinction.
+
+    **Do not start the gate before this is answered.** Building against an unmade choice is
+    the failure recorded twice in adh's harvest line, and the promotion above is
+    independently justified, so there is useful work that does not wait on it.
