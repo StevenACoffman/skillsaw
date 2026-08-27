@@ -1942,17 +1942,28 @@ the request buried among three unrelated asks, where the skill loaded before eve
   there are 29 skill loads, all by `read_file` or a shell `cat`, all detected, and no
   `activate_skill` call anywhere.
 
-- [ ] **Single-run corpus results are not reliable, and two earlier ones were single-run.**
-  This run is the first with repetition and it shows a subject sitting at 62% `first` across
-  24 runs. `climax-cli-scaffold` (9/9) and `matryer-decode-valid` (7/9) were both measured
-  **once per phrasing**.
-  The discrimination finding survives and its evidence changes. 9/9 from a subject at
-  p=0.62 has probability ~1%, so `climax-cli-scaffold` is genuinely more binding than this
-  one and the corpus does separate subjects. But **the 9/9-versus-7/9 comparison it was
-  originally argued from is too weak to carry that at this variance** — two failures out of
-  nine is within what noise produces. The claim should rest on the 9/9-versus-62% gap.
-  Owed: re-run `climax-cli-scaffold` and `matryer-decode-valid` with `--repeat 3` before
-  either number is cited again.
+- [x] **Single-run corpus results are not reliable, and two earlier ones were single-run.**
+  Completed 2026-08-25: Re-ran both `climax-cli-scaffold` and `matryer-decode-valid` with `--repeat 3`
+  to gather reliable repeated measurements.
+
+  **Results summary:**
+  * `climax-cli-scaffold` achieved **21/24 (87.5%) first runs**:
+    - `01-bare (control)`: 3/3 first
+    - Unanimously `first` in `02`, `03`, `04`, `05`, `06`, `07`, `09` (7 of 8 phrasings)
+    - `08-buried-in-a-list`: unanimously `after-action` (0/3 first)
+  * `matryer-decode-valid` achieved **13/24 (54.2%) first runs**:
+    - `01-bare (control)`: 3/3 first
+    - Unanimously `first` in `03` and `07` (2 of 8 phrasings)
+    - Split in `02`, `04`, `06` (2/3 first each)
+    - Split in `05` (1/3 first, 2/3 after-action)
+    - Split in `08` (0/3 first: 2/3 not-triggered, 1/3 after-action)
+    - Unanimously `not-triggered` in `09` (0/3 first)
+
+  **Findings & Impact:**
+  The 9/9 vs 7/9 single-run comparison was indeed a statistical fluke. Under repeated runs,
+  the true gap is between an 87.5% binding skill (`climax-cli-scaffold`) and a 54.2% binding
+  one (`matryer-decode-valid`). Repetitive measurement is essential to filter out LLM
+  stochasticity and separate true structural resilience from lucky single runs.
 
 - [x] **The harness runs the control once, and this run shows why that is not enough.**
   Fixed 2026-08-25: under `--repeat N` the control repeats with everything else and must be
@@ -2091,3 +2102,408 @@ produced nothing, 40 worked. **One directory among them has no `SKILL.md`** —
   `activation` and `portable` handle it; `eval` skips-with-a-note; `preflight` and
   `diagnose` are the ones to look at. `diagnose` already reports and continues
   (`skip %s: %v` to stderr), so `preflight` may be the last one.
+
+## The Phrasings Are Not Equally Hard, and One Does Most of the Work (2026-08-26)
+
+> **Superseded in part, 2026-08-27.** The table below was computed by an `OrderOf` that
+> reads a parallel tool batch as a sequence. The `08` column — the entry's whole argument —
+> is the column most exposed to that defect, because `08` is the phrasing that provokes a
+> wide concurrent batch. Do not cite the numbers until they are recomputed. See *`OrderOf`
+> Reads a Parallel Tool Batch as a Sequence*, below.
+
+Three subjects have now been run with `--repeat 3`, which is enough to compare *phrasings*
+rather than skills. That comparison lives in no entry — it is visible only by reading three
+per-subject tables against each other — and it is the most transferable thing the corpus
+has produced, because it is a claim about the instrument rather than about any skill.
+
+First-verdict counts, nine runs per phrasing (three subjects x three repeats):
+
+| phrasing                | climax | matryer | ctx-key | total   |
+| ----------------------- | ------ | ------- | ------- | ------- |
+| `04-time-pressure`      | 3/3    | 2/3     | 3/3     | **8/9** |
+| `07-accepting-an-offer` | 3/3    | 3/3     | 2/3     | **8/9** |
+| `02-with-context`       | 3/3    | 2/3     | 2/3     | 7/9     |
+| `03-imperative`         | 3/3    | 3/3     | 1/3     | 7/9     |
+| `05-pre-summarised`     | 3/3    | 1/3     | 3/3     | 7/9     |
+| `06-user-pre-explains`  | 3/3    | 2/3     | 1/3     | 6/9     |
+| `09-negated-nearby`     | 3/3    | 0/3     | 1/3     | 4/9     |
+| `08-buried-in-a-list`   | 0/3    | 0/3     | 2/3     | **2/9** |
+
+**`08-buried-in-a-list` is the instrument.** At 2/9 it is twice as discriminating as the
+next-worst phrasing and four times the field average, and it is the only one that fails a
+subject *unanimously* — 0/3 on both `climax-cli-scaffold` and `matryer-decode-valid`,
+skills whose overall rates are 87.5% and 54.2%. A pressure that defeats the strongest
+subject as completely as the weakest is measuring something the others are not.
+
+**And the pressure everyone expects to matter does not.** `04-time-pressure` — *"Don't
+waste time, just get straight into it and start immediately"* — is joint **best** at 8/9.
+Explicitly telling the agent to skip preliminaries is close to harmless. What defeats it is
+being given something else to do first: `08` buries the request as the second of three
+unrelated asks, and the agent services the first one.
+
+- [ ] **Decide what an unequal corpus means for how it is read and reported.** Two readings,
+  and the data does not choose between them:
+  - **The corpus is working and `08` is why.** Then a subject's headline number is
+    dominated by one phrasing, and reporting `21/24` hides that the failure is entirely in
+    one row. A per-phrasing table should lead, not the total.
+  - **`08` is a different test wearing the same clothes.** The other eight vary *how the
+    request is phrased*; `08` varies *what else is in the message*. That is arguably a
+    distinct axis — competing demands rather than adversarial phrasing — and averaging it
+    with the rest produces a number about neither.
+  Owed before either is adopted: a fourth subject, to check `08`'s dominance is not an
+  artefact of three. If it holds, splitting the report is cheap and the alternative is a
+  headline figure that mostly reports one row.
+
+- [ ] **`09-negated-nearby` may be measuring the wrong thing.** Second-worst at 4/9, and
+  its two failures are `not-triggered` rather than `after-action` — the skill never loaded
+  at all. That is what `activation` diagnoses, not what ordering does. The prompt places a
+  negation next to the request (*"Don't bother with anything heavyweight or
+  process-driven"*), and a skill that then fails to load may be responding to the negation
+  rather than being beaten to the punch. Worth separating: if `09` mostly produces
+  `not-triggered`, it belongs with trigger accuracy and not in a corpus about ordering.
+
+## The After-Action Verdict on `08` Is Partly Built into the Prompt (2026-08-26)
+
+> **Largely superseded, 2026-08-27.** The mechanism proposed here — the agent services the
+> config-file item, then loads the skill — is not what the transcripts show. It issues both
+> at once. The `OrderOf` defect below is the real cause. What survives is the meta-test
+> methodology note, which is restated in the new entry's last item.
+
+The L1346 meta-test was run twice against `climax-cli-scaffold` on `08-buried-in-a-list`,
+and the pair is more informative than either half.
+
+The first run substituted the bare `{{TASK}}` string and lost the surrounding list, so it
+asked about a message that never failed. It answered that the task did not match the
+skill's trigger list (*"initializing a new Go CLI application... adding new subcommands...
+drifted from the canonical ff/v4 pattern"*) and so the skill would not be loaded — an
+account of `not-triggered`. The measured verdict was `after-action` 3/3: the skill *did*
+load. The account explained an outcome that did not occur, and the measurement refuted it.
+
+The second run substituted the real three-item prompt. It answered that it decomposes a
+bulleted list and executes the actionable items in encounter order, and that it treated
+loading the skill as *"one independent task among three, rather than a blocking
+pre-condition for the entire turn"* — naming the config-file search specifically. That is
+an account of `after-action`, and it matches.
+
+**The code says the same thing, and says it is close to forced.** `OrderOf` sets
+`acted = true` on any tool outside `planningTools()`, and the first list item — *"Check
+whether the config file still has the old timeout in it"* — cannot be answered without
+reading a file. So an agent that services the items in the order they are written earns
+`after-action` before it ever reaches the request. The 2/9 rate is at least partly a
+property of the prompt.
+
+**This makes `08`'s `after-action` a different event from `01-bare`'s.** In `01` nothing
+else was asked, so acting before the skill loads means acting on the skill's own task —
+the defect the verdict is named for. In `08` it can equally mean answering a neighbouring
+question and then loading the skill promptly. The two are pooled under one word, and a
+subject's headline number adds them together. This sharpens the second reading in the
+entry above from "arguably a distinct axis" to a mechanism.
+
+- [ ] **Settle per-run whether `08` failures serviced a neighbour or started the subject's
+  own work.** `Before()` already returns exactly this — the non-planning tools that ran
+  ahead of the skill, in order — and a config-file `read_file` reads very differently from
+  an edit to the CLI being scaffolded. Nothing needs writing to answer it. What blocks it
+  is that `run.sh` defaults `--out` to `mktemp -d` and the completed runs were not kept, so
+  the transcripts that would decide it are gone. Re-run the three subjects on `08` with an
+  explicit `--out`, then report `Before()` alongside the verdict.
+
+- [x] **Report the tools-before list wherever `after-action` is reported.** Done 2026-08-27. If the two
+  meanings above both turn out to occur, the verdict alone is not actionable and the fix
+  differs between them. `Before()` exists and is unused by the harness summary.
+
+- [ ] **Constrain the meta-test to the exact failing prompt, and check its answer against
+  the verdict.** Both runs picked the same shape — *"the skill was clear, I chose to start
+  working anyway"* — while giving mechanisms that imply different verdicts, so the shape
+  taxonomy carries little information on its own and the mechanism is the payload. One
+  cheap guard follows: an account that implies `not-triggered` for a run measured
+  `after-action` is refuted, and can be discarded without judgement. Reconstruction from a
+  cold session is a hypothesis; resuming the failing session would be a report, and needs a
+  stable per-phrasing working directory plus `--session-id` in `run.sh`.
+
+## `OrderOf` Reads a Parallel Tool Batch as a Sequence (2026-08-27)
+
+`climax-cli-scaffold` was re-run on all nine phrasings with `--repeat 3` and an explicit
+`--out`, so the transcripts survived and `Before()` could finally be asked. It reported
+`08-buried-in-a-list` as SPLIT — 2 first, 1 after-action — where the previous run had it
+0/3. That instability is the finding: the two runs are the same behaviour.
+
+Both issue a single parallel tool batch, four calls, no result returned in between:
+
+| run 1 — `after-action`   | run 2 — `first`          |
+| ------------------------ | ------------------------ |
+| `update_topic`           | `update_topic`           |
+| `glob **/*config*`       | `read_file` .../SKILL.md |
+| `read_file` .../SKILL.md | `glob **/*config*`       |
+| `read_file` MEMORY.md    | `read_file` MEMORY.md    |
+
+Emitted across 742ms and 576ms respectively; every `tool_result` in both runs arrives after
+the last of the four. **The verdict turns on the emission order of two concurrent calls
+whose results had not come back.** Nothing was learned from the `glob` before the skill was
+read — its output was `No files found`, and it had not yet been delivered.
+
+`OrderOf` walks a flat slice and sets `acted` on the first non-planning tool, so it cannot
+see this: `Read` discards `tool_result` records, and batch structure is gone before
+`OrderOf` runs. The rule it encodes — *work began before the skill loaded* — requires that
+a result was available to work from. Concurrent issuance is not work.
+
+Recomputed over all 27 captured runs, treating a non-planning tool as action only when it
+sits in a **strictly earlier batch** than the skill load: exactly one verdict changes,
+`08-buried-in-a-list.1` from `after-action` to `first`. It was the run's only failure, so
+`climax-cli-scaffold` is 9/9 with no ordering defect at all. The change is strictly more
+lenient, so no `first` can become a failure and the other 26 are unaffected by
+construction.
+
+- [x] **Give `ToolUse` a batch index and make `OrderOf` compare batches.** Done
+  2026-08-27. `Read` numbers batches lazily — the counter advances when a use arrives after
+  a result, not at the result — so the run of consecutive results that ends a four-call
+  batch advances it once. `OrderOf` returns `OrderAfterAction` only when the earliest
+  non-planning use is in a lower-numbered batch than the load; `Before()` filters the same
+  way. All pure.
+
+  Two zero-value rules make it fail closed, and both matter more than the batching itself:
+
+  - **A zero batch means unknown, and unknown falls back to document order** — the stricter
+    reading. Every hand-built slice carries zeros, so the alternative would have quietly
+    voided the existing table.
+  - **A transcript that logs no results at all has its batch numbers withdrawn.** Without
+    results there is nothing to divide batches by, so every use lands in batch 1 and reads
+    as one enormous concurrent burst — clean, always. Found by the `cmd` tests, whose
+    fixtures log uses without results. The tempting fix was to add results to the fixtures;
+    that would have left any real transcript in a result-free format silently passing.
+- [x] **Plant the negative control before trusting it.** Done 2026-08-27, twice. The
+  `Read` table was checked against a plausible wrong implementation — increment at the
+  result rather than lazily — and three rows caught it across both runtime dialects. The
+  `OrderOf` table was run against the unmodified function first: the run-1 row failed
+  `after-action`/`first` and two `Before` rows failed, which is the whole reason the pair
+  is in the file. A row with a genuine result-then-act sequence guards the opposite cheat,
+  since "always return `first`" passes the concurrent rows.
+
+  One caveat on the third test,
+  `TestNumberingEveryUseSeparatelyReproducesDocumentOrder`: it passed before the change as
+  well as after. It is a guard against future loosening of `<` to `<=`, not a control for
+  this one, and should not be read as evidence the change worked.
+- [x] **Re-score the captured corpus.** Done 2026-08-27. `ordering --agreement` over all 27
+  transcripts reports `first in all 3 runs` for every phrasing, exit 0 — one flip from the
+  flat reading, matching the recomputation exactly. `climax-cli-scaffold` has no ordering
+  defect on any of the nine.
+- [ ] **Recompute the phrasing table, and re-ask whether `08` discriminates.** The
+  superseded entry above claimed `08` is the instrument at 2/9. That claim is now
+  unsupported and plausibly backwards: `08` asks for three things, so it provokes the
+  widest concurrent batch, so it has the most chances for a non-skill call to land earlier
+  in the batch. `08` may have been measuring batch width. The `matryer` and `ctx-key`
+  transcripts were written to `mktemp -d` and are gone, so this needs re-running with
+  `--out` before anything is concluded — including whether the corpus discriminates at all.
+- [x] **Have `run.sh` default `--out` to a durable path.** Done 2026-08-27. Three findings in two days have
+  been blocked on transcripts that no longer exist. A run whose evidence is discarded by
+  default cannot be re-examined when the reading of it is questioned, which is exactly when
+  it is needed.
+- [ ] **Restated from the superseded entry: constrain the meta-test to the exact failing
+  prompt, and check its answer against the verdict.** Both meta-runs picked the same shape
+  while giving mechanisms implying different verdicts, so the shape taxonomy carries little
+  on its own. Note that the second meta-answer — decompose the list, execute in encounter
+  order — was *also* wrong: the transcripts show one concurrent batch, not sequential
+  servicing. It was plausible, matched the verdict, and still misdescribed the behaviour.
+  That is a stronger caution than the first failure, because consistency with the verdict
+  was the check proposed for catching this.
+
+## An Unrecognised `activate_skill` Inverts the Verdict (2026-08-27)
+
+A fresh 27-run capture of `climax-cli-scaffold` reported `06-user-pre-explains` as SPLIT,
+2 first and 1 after-action. `Before()` named the tool that supposedly came first:
+`activate_skill`. The run was this, and it is the best-behaved run in the corpus:
+
+```text
+batch1  activate_skill  {"skill_name": "climax-cli-scaffold"}
+batch2  update_topic, read_file .../climax-cli-scaffold/SKILL.md
+```
+
+It activated the skill as its very first tool call, before anything else, and scored
+`after-action` **for having done so**. `skillIn` read the declared skill from `name`, and
+Gemini wrote it under `skill_name`, so the load went unrecognised — and an unrecognised
+`activate_skill` is not ignored, it is an ordinary tool, which counts as work. The verdict
+was not merely wrong, it was the exact inverse of the behaviour.
+
+Both spellings appear in the same 27 runs from the same tool: `skill_name` twice
+(`05-pre-summarised.2`, `06-user-pre-explains.3`) and `name` once
+(`05-pre-summarised.1`). Neither is *the* spelling, which is why the fix is a list rather
+than a corrected constant.
+
+Fixed 2026-08-27, with both spellings checked and a negative control seen to fail: the
+planted single-spelling version fails the unit case and the end-to-end one, the latter
+reporting `Before() blames [activate_skill]`. A row for an ordinary tool carrying a `name`
+parameter guards the inverse mistake — reporting a load that never happened, which is the
+more flattering error and so the one worth pinning.
+
+With this and the batching fix in, all nine phrasings read `first in all 3 runs`, exit 0.
+
+- [ ] **Re-examine every `after-action` ever recorded for this cause.** Two independent
+  defects have now each produced a false `after-action`, and the corpus's entire claim to
+  discriminate rests on that verdict. Neither was visible without opening the transcript.
+  Nothing recorded before 2026-08-27 should be cited until re-scored.
+- [x] **The harness runs whatever `skillsaw` is on PATH, and said nothing about it being
+  three days stale.** Closed by the provenance header below, which also found that the
+  version string alone would not have caught it.
+- [x] **Find the remaining spellings before they cost another verdict.** Answered
+  2026-08-27, and it refuted the fix above. Gemini CLI 0.46.0 documents **one** argument —
+  `name` — in `bundle/docs/tools/activate-skill.md`, and `skill_name` appears nowhere in
+  the bundle. Both captured `skill_name` calls came back *"Tool activate_skill not found.
+  Did you mean one of: write_file, update_topic, read_file"*: under `--approval-mode plan`
+  the tool is absent, and the model invented the call along with the parameter. Honouring
+  it credited a failed call to a non-existent tool as a loaded skill. Reverted the same
+  day; `skillIn` now carries a note so the next reader who meets `skill_name` in a
+  transcript does not re-derive the wrong fix from the same two calls.
+- [x] **`run.sh` reports the instruments it used.** Done 2026-08-27, and the obvious
+  version string was not enough. `skillsaw version` prints `BuildDate` from the *module
+  pseudo-version*, not the build: a `go install` at 09:08 today still reported
+  `BuildDate: 2026-08-25T03:21:10`, so two builds days apart from the same dirty tree are
+  identical in every field it prints. The binary's mtime is the field that differs, and is
+  what the header now carries, alongside the resolved path, `GitVersion`, a dirty-tree
+  warning, and the gemini version when the agent actually ran. Written to
+  `$OUT/provenance.txt` as well as stdout, since the transcripts outlive the scrollback.
+
+## Twenty of Twenty-Seven Runs Never Loaded the Skill (2026-08-27)
+
+Teaching `OrderOf` to skip calls the runtime rejected — the fix for the errored
+`activate_skill` being reported as work done first — turned the control red, and the
+control was right. `01-bare` had been passing 3/3 on two calls that both failed:
+
+```text
+read_file          error: Path not in workspace: "/Users/steve/.agents/skills/
+                          climax-cli-scaffold/SKILL.md" resolves outside the workspace
+run_shell_command  error: Tool execution denied by policy. You are in Plan Mode with
+                          access to read-only tools.
+```
+
+Three ways in, all shut. `activate_skill` is not in the plan-mode tool set; `read_file`
+refuses a path outside the workspace, and the skills live in `~/.agents/skills`; the `cat`
+fallback is denied as script execution. **The agent never read the skill.**
+
+Across the corpus, a load attempt succeeded in **7 of 27 runs**. Re-scored per run:
+19 `not-triggered`, 6 `after-action`, 2 `first`.
+
+Every ordering number this harness has produced under `--approval-mode plan` was awarded
+for a *refused* attempt to read the skill. The instrument was not measuring when the skill
+loaded; it was measuring the order of attempts, and 20 of 27 of those failed. The phrasing
+table, `08`'s apparent discriminating power, the 9/9 sweep from earlier today — all of it
+was scored on transcripts in which the skill was never in context.
+
+The control did exactly what it exists for, three days later than it should have, because
+until today a failed read counted as a load.
+
+- [x] **Decide how the harness gives the agent access to the skill.** Decided 2026-08-27:
+  **drop `--approval-mode plan`.** The re-run itself is the three items below.
+
+  Four options were weighed. Two of them — running from a working directory that contains
+  the skills, and copying the subject skill into each run's workspace — open `read_file`
+  and leave `activate_skill` absent, so they measure the *fallback* path. That is the
+  decisive argument against both: the corpus asks when the skill loads relative to work,
+  and under Gemini the intended mechanism is `activate_skill`, which succeeded in exactly
+  one of 27 captured runs. Either option would produce green numbers while leaving the
+  primary path as untested as it is today, and this week has been a sequence of green
+  numbers that meant nothing. Switching to Claude Code was the fourth, and does not answer
+  the question the corpus asks.
+
+  **What it costs.** The agent can write, edit, and run commands. `capture()` already gives
+  each run a fresh `mktemp -d` working directory and a `timeout 300`, so isolation and
+  runaway are already handled — but an agent with shell access is not confined to its cwd,
+  and runs on the operator's machine with the operator's privileges. That is a deliberate
+  acceptance, not an oversight, and it is the reason this was a decision rather than a fix.
+  Runs also get slower and messier, because prompts like `08` invite the agent to actually
+  do the task.
+
+  **Why the cost is right.** An ordering harness whose agent cannot act cannot observe
+  acting-before-loading, which is the one thing it measures. Plan mode was not only blocking
+  the skill; it was blocking the failure mode. Expect the numbers to get *worse* — every
+  `first` in the corpus so far was awarded for a refused read — and expect that to be the
+  first evidence the instrument works.
+- [x] **Drop plan mode in `capture()`, and say in the comment what that admits.** Done
+  2026-08-27, and the title understated it: `--approval-mode` has four values, and two of
+  the three alternatives to `plan` would have reproduced the bug. `default` prompts for
+  approval, and `capture()` runs with stdin closed, so a tool needing approval is denied or
+  stalls to the 300s timeout — the same failure by another route, and one that would have
+  read as a fresh finding. `auto_edit` leaves `run_shell_command` needing approval, so the
+  `cat` fallback stays shut. Only `yolo` is genuinely non-interactive. Exposed as
+  `--approval-mode`, defaulting to `yolo`, so `plan` can still reproduce the pre-2026-08-27
+  corpus, and recorded in the provenance block because the mode decides what a run is *able
+  to observe* rather than merely how it behaves.
+
+  **Two doors open, one may not.** `activate_skill` and the shell fallback are approval
+  decisions and open under `yolo`. `read_file` refusing `~/.agents/skills/...` is a
+  *workspace boundary*, and there is no reason to expect an approval mode to move it.
+  `--include-directories` would, and was deliberately not added: it widens what the agent
+  may read, which is adjacent to the option the decision rejected, and adding it now would
+  confound the one variable being changed. The control run is the probe.
+
+  The control's advice now branches three ways rather than asserting `plan`: under `plan`
+  the cause is known and the fix is the flag; under anything else approval is ruled out and
+  the workspace is what remains; and when scoring captured transcripts it says that this
+  run's mode describes nothing about what produced them — which would have been confidently
+  wrong for every transcript captured before today. The
+  `--approval-mode plan` argument comes out; the block comment above `capture()` currently
+  ends *"and plan mode keeps it read-only"*, which becomes false. Replace it with what is
+  now true: the agent can act, that is required for the measurement, and the containment is
+  a fresh cwd plus a timeout rather than a read-only mode.
+- [ ] **Re-run the control alone before paying for the rest.** `01-bare` at `--repeat 3`.
+  If it does not come back unanimously `first`, access is still not solved and there is no
+  reason to run the other eight. This is cheap and it is the step that was skipped every
+  previous time.
+- [ ] **Then re-run the full corpus, and re-derive every claim from it.** Three subjects at
+  `--repeat 3`. Everything blocked below depends on this and nothing else.
+- [x] **A refused load must not read as `not-triggered`.** Done 2026-08-27. The verdict now says the skill's
+  description failed to fire when the truth is the runtime denied access, and that is
+  currently the reported outcome for 19 of 27 runs. It was filed as a hypothetical when
+  `OrderOf` learned to skip failed calls; it is not hypothetical. Needs either a fifth
+  `Order` — the honest reading is "unmeasurable", not a verdict about the skill — or a
+  refusal to score such a run at all, which is what `activation`'s `UNMEASURED` already
+  does for a skill it could not read.
+- [x] **Make the control's failure name the cause.** Done 2026-08-27. It correctly refused to interpret the
+  other eight, and said *"fix the trigger first"* — advice for a skill defect, pointed at
+  a sandbox policy. An author following it would rewrite a description that was never read.
+  The control now branches on whether `unmeasurable` appears among its verdicts, and prints
+  the agreement line for the control before the advice, so the claim *"the run above names
+  which"* is true rather than aspirational.
+
+**One thing the work turned up, worth keeping.** `ordering.emit` ended in a `default` case
+that rendered `"first — loaded before any work"`. Adding `OrderUnmeasurable` without
+touching it would have printed **a pass** for every refused run — exit code still non-zero,
+so CI would have caught it, and every human reading the report would not. `OrderFirst` is
+now an explicit case and the default reports an unrecognised verdict. This is the third
+inverted verdict this file has produced in a week, and the first one caught before it
+shipped rather than after; `TestANewVerdictDoesNotRenderAsAPass` guards the shape rather
+than any one value, so the next `Order` added cannot repeat it.
+
+## The Orphan Gate, Sited Here (2026-08-27)
+
+Source: exegesis deferred this pending a siting question and the answer came back "not
+there". exegesis is snapshot-shaped — one `manifest.Build` call, **zero** `manifest.Diff` —
+and a regression-relative gate would cost it that property permanently for one check.
+
+- [ ] **Report what a change orphaned: a skill that lost its last inbound edge.**
+  `coherence`'s `OrphanEndpoints` meter (`internal/drift/drift.go:198`) is the shape:
+  `NewlyOrphanedEndpoints` **and** `NewlyCoveredEndpoints` — both directions, so the gate
+  is regression-relative rather than absolute — plus `BaseAvailable`, keeping *"no
+  baseline"* distinct from *"zero"* the way `timeseries.Verdict.Compared` does.
+
+  **It belongs here because `Uncoupled` already solved its sub-problems**, not merely
+  because `changed` has a baseline. Two rules transfer unchanged from
+  `internal/edit/coupling.go`, and re-deriving them would be the whole risk:
+  - *"A location absent from the baseline is new and has nothing to be uncoupled from"* — a
+    skill absent from the baseline cannot be **newly** orphaned. Without this the first
+    corpus-wide run reports every pre-existing orphan as new.
+  - *"The result is advisory… a gate that fires on those teaches people to bypass it"* — an
+    intentional removal legitimately orphans something, so blocking is the caller's
+    decision taken by promoting the severity.
+
+  **Carry `Convention` across, and it is the most transferable part.** True only when the
+  current graph contains any edge of the kind being checked — proof the corpus actually
+  uses the pattern — and it skips the check when false. That is a **fifth** way to answer
+  "does this check apply here", and unlike the four the family already uses (a derived gate
+  in `redlines.checkTrigger`, a declared field in `skill.Lineage`, a manual `--check`
+  opt-in, an advisory severity) it is **derived from the corpus** rather than declared,
+  judged, or opted into. A repo that has never written a `verifies` edge is not failing the
+  convention; it has not adopted it.
+
+  Blocked on one prerequisite: **`related` must be promoted from exegesis to skillet**
+  (filed there). It is the only reader of the `## Related skills` graph and is currently
+  under exegesis's `internal/`. Do not fork it — a second implementation of "what is an
+  edge" would disagree at the margins over fences and wrapped bullets.
