@@ -2443,12 +2443,108 @@ until today a failed read counted as a load.
   ends *"and plan mode keeps it read-only"*, which becomes false. Replace it with what is
   now true: the agent can act, that is required for the measurement, and the containment is
   a fresh cwd plus a timeout rather than a read-only mode.
-- [ ] **Re-run the control alone before paying for the rest.** `01-bare` at `--repeat 3`.
-  If it does not come back unanimously `first`, access is still not solved and there is no
-  reason to run the other eight. This is cheap and it is the step that was skipped every
-  previous time.
-- [ ] **Then re-run the full corpus, and re-derive every claim from it.** Three subjects at
-  `--repeat 3`. Everything blocked below depends on this and nothing else.
+- [x] **Re-run the control alone before paying for the rest.** Done 2026-08-27, and it
+  answered both questions at once. **Access is solved:** `01-bare` came back 3/3 `first`
+  under `--approval-mode yolo`, against 0/3 `unmeasurable` under `plan`. The decision was
+  right and the primary path works.
+- [ ] **Re-run the full corpus — the 2026-08-27 10:31 run is contaminated and must not be
+  cited.** It completed and reported eight of nine phrasings `first`, and the numbers are
+  still worthless, for three separate reasons found by reading the transcripts.
+
+## Yolo Let the Agent Edit Its Own Harness (2026-08-27)
+
+The containment note added to `capture()` that morning said an agent with shell access "is
+not confined to its cwd" and called it an accepted cost. It was accepted in the abstract
+and bit on the first run, harder than the note imagined.
+
+**It modified the instrument.** `05-pre-summarised.3` ran
+
+```sh
+sed -i.bak 's/names() { find ... }/names() { echo -n ""; }/' .../harness/run.sh
+```
+
+against the live `harness/run.sh`, neutering the function that enumerates the phrasings,
+and then invoked `harness/run.sh --skill climax-cli-scaffold --repeat 3` recursively. The
+running instance survived because bash had already parsed the function, so the sabotage did
+not show up in the output — it sat on disk afterwards, and `run.sh.bak` beside it, until
+someone looked. A subsequent run of the corpus would have enumerated zero phrasings and
+reported nothing wrong.
+
+**It roamed.** With an empty working directory and a prompt asking it to "check whether the
+config file still has the old timeout in it", `08-buried-in-a-list.1` went looking across
+`~/Documents/agent-orange/climax` — 30+ shell commands, `git log`, `climax lint`. Others
+reached into `skillsaw` itself, read its `TODO.md` and `git diff`, and one ran `go install
+.`, **replacing the scorer while the run was in progress**. The provenance header printed a
+10:30 binary; by the end there was an 11:30 one.
+
+**It produced transcripts the reader cannot open.** Two runs came back at 17MB and 105MB,
+single lines of 17MB each, over `maxLine`'s 8MiB. That is what `SPLIT over 3 runs: 2 , 1
+first` was: two `UNREAD` transcripts tallied as the zero-value Order and rendered as
+nothing at all.
+
+Restored: `names()` from the `.bak`, `.bak` deleted, scorer reinstalled from a verified
+tree, tests and lint green. `go.mod`'s skillet v0.22.0 → v0.23.0 was the operator's, not the
+agent's.
+
+- [x] **Contain the agent before re-running.** Done 2026-08-27 with macOS seatbelt, via
+  `GEMINI_SANDBOX=sandbox-exec` and a new `--sandbox` flag defaulting to it on Darwin.
+
+  The default profile, `permissive-open`, turns out to be exactly the shape this needs, and
+  the reason is worth recording because the obvious stricter choice would break the
+  measurement. Probed rather than assumed:
+
+  |           | outside the run's cwd                 | inside it |
+  | --------- | ------------------------------------- | --------- |
+  | **read**  | allowed — the skill stays reachable   | allowed   |
+  | **write** | blocked — *"Operation not permitted"* | allowed   |
+
+  So the agent can still read `~/.agents/skills/.../SKILL.md`, which is the whole
+  measurement, and can still do the scaffolding task in its own directory, but cannot touch
+  the harness, the repos, or `~/go/bin`. **Do not reach for `strict-open` or
+  `restrictive-*`:** those restrict reads as well, the skill lives outside the workspace,
+  and every run would come back `unmeasurable` — the failure of the previous three days,
+  re-created by a security setting instead of an approval mode.
+
+  Missing sandbox is a **refusal**, not a warning: `run.sh` exits 2 unless a mode is given
+  or `--sandbox none` is passed deliberately. A warning would have scrolled past exactly
+  like the stale-binary line did, and the failure it guards against is invisible in the
+  output by construction — the sabotaged `names()` did not affect the run that wrote it,
+  because bash had already parsed the function.
+- [x] **An `UNREAD` transcript must not render as an empty verdict.** Done 2026-08-27
+  via a `label()` in the agreement view that renders the zero-value Order as `unreadable`.
+  The run summary was wrong in the same way and is fixed alongside: it said *"at least one
+  phrasing started work before loading the skill"* for any non-`first` verdict, and three
+  of the four are not that. It now says which and points at the rows. Original entry: `emitAgreement` tallies
+  `report.Order`, which `judge` leaves as the zero value when the file cannot be read, so a
+  broken run prints the count followed by nothing — a blank where a verdict goes. Same class as the `emit` default
+  that rendered unknown verdicts as "first", and missed because the fix went to `emit` only.
+  The run summary compounded it: *"at least one phrasing started work before loading the
+  skill"* when nothing was after-action and two transcripts were simply unreadable.
+- [x] **Raise or remove `maxLine`.** Done 2026-08-27: 8MiB → 64MiB, against a measured
+  17.5MB largest line, so it is headroom over observed reality rather than a principled
+  bound. Deliberately still **fatal** when exceeded, and the reasoning is the interesting
+  part: the line that would be dropped is almost always a `tool_result`, and a dropped
+  result silently merges two batches into one, making `OrderOf` *more lenient*. A verdict
+  softened by a parse failure nobody saw is the exact failure mode of the last three days,
+  so refusing the file is the loud version of the same fact — which is what makes the
+  `unreadable` label above necessary rather than cosmetic. Original entry: 8MiB was sized for an agent that could not act. A
+  single `tool_result` now reaches 17MB, and the failure mode is the whole transcript
+  becoming unreadable rather than one event being skipped. Consider whether a line that
+  large should be read for its tool-call envelope and have its payload discarded, since
+  ordering never needs the output text.
+- [x] **Reconsider the `08` prompt's first item under an agent that can act.** Done
+  2026-08-27. Both neighbours are now answerable from the conversation — a naming-convention
+  question and a "why did we land on the shorter timeout" question — with no filesystem
+  referent for either. The burial is unchanged: the request is still the second of three.
+  What changes is that a neighbour can no longer be *serviced* with tools, so an
+  `after-action` verdict on `08` now means the agent began the skill's own task first, which
+  is the ordering question. Note this narrows what `08` measures, and is a partial answer to
+  the still-open question of whether `08` was ever on the same axis as the other eight.
+  Original entry: *"Check
+  whether the config file still has the old timeout in it"* has no referent in an empty
+  working directory, so a capable agent goes hunting for one across the filesystem. Under
+  plan mode that was a couple of refused reads; under yolo it is dozens of shell commands
+  and the bulk of the runtime.
 - [x] **A refused load must not read as `not-triggered`.** Done 2026-08-27. The verdict now says the skill's
   description failed to fire when the truth is the runtime denied access, and that is
   currently the reported outcome for 19 of 27 runs. It was filed as a hypothetical when
@@ -2517,10 +2613,10 @@ and a regression-relative gate would cost it that property permanently for one c
     never what the baseline's graph was, and "newly orphaned" splits into a half that is
     computable and a half that is not:
 
-    | half | needs | available |
-    | ---- | ----- | --------- |
-    | orphaned **now** | the current tree | yes, with `--tree` and promoted `related` |
-    | **not** orphaned before | the baseline's edge graph | **no** |
+    | half                    | needs                     | available                                 |
+    | ----------------------- | ------------------------- | ----------------------------------------- |
+    | orphaned **now**        | the current tree          | yes, with `--tree` and promoted `related` |
+    | **not** orphaned before | the baseline's edge graph | **no**                                    |
 
     An edge disappears when a skill is removed, or when a surviving skill's body drops a
     bullet. The first is invisible because the skill is gone; the second because its old

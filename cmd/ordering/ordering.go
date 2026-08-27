@@ -35,6 +35,7 @@ type report struct {
 	Order      transcript.Order `json:"order"`
 	Tools      int              `json:"tools"`
 	Before     []string         `json:"before,omitempty"`
+	Refused    []string         `json:"refused,omitempty"`
 	Err        string           `json:"error,omitempty"`
 }
 
@@ -143,22 +144,27 @@ func phrasingOf(path string) string {
 func (cfg *Config) emitAgreement(reports []report) error {
 	names := make([]string, 0, len(reports))
 	byName := map[string][]transcript.Order{}
+	causeOf := map[string][]string{}
 	for i := range reports {
 		n := phrasingOf(reports[i].Transcript)
 		if _, seen := byName[n]; !seen {
 			names = append(names, n)
 		}
 		byName[n] = append(byName[n], reports[i].Order)
+		causeOf[n] = mergeNames(causeOf[n], reports[i].Before, reports[i].Refused)
 	}
 	sort.Strings(names)
 
 	type row struct {
 		Phrasing  string               `json:"phrasing"`
 		Agreement transcript.Agreement `json:"agreement"`
+		Cause     []string             `json:"cause,omitempty"`
 	}
 	rows := make([]row, 0, len(names))
 	for _, n := range names {
-		rows = append(rows, row{Phrasing: n, Agreement: transcript.Agree(byName[n])})
+		rows = append(rows, row{
+			Phrasing: n, Agreement: transcript.Agree(byName[n]), Cause: causeOf[n],
+		})
 	}
 
 	if cfg.JSON {
@@ -171,25 +177,70 @@ func (cfg *Config) emitAgreement(reports []report) error {
 	}
 	for _, r := range rows {
 		a := r.Agreement
+		var verdict string
 		switch {
 		case a.Runs == 1:
 			// One sample is not convergence, and calling it unanimous would invite a
 			// reader to treat a single observation as a property.
-			_, _ = fmt.Fprintf(cfg.Stdout, "%-24s %s (1 run — not repeated)\n",
-				r.Phrasing, a.Tally[0].Order)
+			verdict = fmt.Sprintf("%s (1 run — not repeated)", label(a.Tally[0].Order))
 		case a.Unanimous:
-			_, _ = fmt.Fprintf(cfg.Stdout, "%-24s %s in all %d runs\n",
-				r.Phrasing, a.Tally[0].Order, a.Runs)
+			verdict = fmt.Sprintf("%s in all %d runs", label(a.Tally[0].Order), a.Runs)
 		default:
 			parts := make([]string, 0, len(a.Tally))
 			for _, v := range a.Tally {
-				parts = append(parts, fmt.Sprintf("%d %s", v.Count, v.Order))
+				parts = append(parts, fmt.Sprintf("%d %s", v.Count, label(v.Order)))
 			}
-			_, _ = fmt.Fprintf(cfg.Stdout, "%-24s SPLIT over %d runs: %s\n",
-				r.Phrasing, a.Runs, strings.Join(parts, ", "))
+			verdict = fmt.Sprintf("SPLIT over %d runs: %s", a.Runs, strings.Join(parts, ", "))
 		}
+		_, _ = fmt.Fprintf(cfg.Stdout, "%-24s %s%s\n", r.Phrasing, verdict, cause(r.Cause))
 	}
 	return nil
+}
+
+// label renders an Order for a human.
+//
+// OrderUnknown exists only as a zero value, and its string is empty, so a tally printing
+// the raw value shows a count followed by nothing -- which is how two unreadable
+// transcripts came to render as "2 " and read as a rendering glitch rather than as two
+// runs nobody scored.
+func label(o transcript.Order) string {
+	if o == transcript.OrderUnknown {
+		return "unreadable"
+	}
+	return string(o)
+}
+
+// cause renders the trailing explanation, or nothing when there is none to give.
+//
+// This view is the one run.sh prints for every repeated run, and until now it showed the
+// tally alone -- so the tools that ran first, which Before has always known, reached nobody.
+// Three misreadings this week were resolved by opening a transcript to find exactly this.
+func cause(names []string) string {
+	if len(names) == 0 {
+		return ""
+	}
+	return " (" + strings.Join(names, ", ") + ")"
+}
+
+// mergeNames appends the names not already present, preserving first-seen order.
+//
+// The union across a phrasing's runs rather than one line each, because the phrasing is the
+// unit here: three runs blaming the same tool is one fact about the phrasing, and printing
+// it three times would read as three.
+func mergeNames(into []string, from ...[]string) []string {
+	seen := make(map[string]bool, len(into))
+	for _, n := range into {
+		seen[n] = true
+	}
+	for _, list := range from {
+		for _, n := range list {
+			if !seen[n] {
+				seen[n] = true
+				into = append(into, n)
+			}
+		}
+	}
+	return into
 }
 
 // judge reads one transcript and reports its verdict.
@@ -212,11 +263,17 @@ func (cfg *Config) judge(path string) report {
 	rep.Tools = len(uses)
 	rep.Order = transcript.OrderOf(uses, cfg.Skill)
 	rep.Before = transcript.Before(uses, cfg.Skill)
+	rep.Refused = transcript.Refused(uses, cfg.Skill)
 	return rep
 }
 
 // emit renders the verdicts, naming what ran first when something did -- a verdict that
 // says work happened without saying what is a verdict nobody can act on.
+//
+// OrderFirst is an explicit case and the default is not. A default that renders success
+// means any Order added later reads as a pass until someone remembers this function, which
+// is the failure this file has produced twice: the exit code would still be non-zero, and
+// every human reading the report would see the word "first".
 func (cfg *Config) emit(reports []report) error {
 	if cfg.JSON {
 		enc := json.NewEncoder(cfg.Stdout)
@@ -227,26 +284,34 @@ func (cfg *Config) emit(reports []report) error {
 		return nil
 	}
 	for i := range reports {
-		r := &reports[i]
-		switch {
-		case r.Err != "":
-			_, _ = fmt.Fprintf(cfg.Stdout, "%s: UNREAD — %s\n", r.Transcript, r.Err)
-		case r.Order == transcript.OrderAfterAction:
-			_, _ = fmt.Fprintf(cfg.Stdout,
-				"%s: AFTER ACTION — %s loaded, but %v ran first over %d tool use(s)\n",
-				r.Transcript, r.Skill, r.Before, r.Tools)
-		case r.Order == transcript.OrderNotTriggered:
-			_, _ = fmt.Fprintf(
-				cfg.Stdout,
-				"%s: NOT TRIGGERED — %s never loaded in %d tool use(s)\n",
-				r.Transcript,
-				r.Skill,
-				r.Tools,
-			)
-		default:
-			_, _ = fmt.Fprintf(cfg.Stdout, "%s: first — %s loaded before any work\n",
-				r.Transcript, r.Skill)
-		}
+		_, _ = fmt.Fprintln(cfg.Stdout, line(&reports[i]))
 	}
 	return nil
+}
+
+// line renders one verdict.
+//
+// Split out so the shapes sit side by side and the reader can see that each names what to
+// do about it: which tools ran first, or which doors were shut.
+func line(r *report) string {
+	switch {
+	case r.Err != "":
+		return fmt.Sprintf("%s: UNREAD — %s", r.Transcript, r.Err)
+	case r.Order == transcript.OrderAfterAction:
+		return fmt.Sprintf("%s: AFTER ACTION — %s loaded, but %v ran first over %d tool use(s)",
+			r.Transcript, r.Skill, r.Before, r.Tools)
+	case r.Order == transcript.OrderUnmeasurable:
+		return fmt.Sprintf(
+			"%s: NOT MEASURABLE — %s was asked for and never loaded: every attempt failed "+
+				"(%s). Nothing here is a fact about the skill.",
+			r.Transcript, r.Skill, strings.Join(r.Refused, ", "))
+	case r.Order == transcript.OrderNotTriggered:
+		return fmt.Sprintf("%s: NOT TRIGGERED — %s never loaded in %d tool use(s)",
+			r.Transcript, r.Skill, r.Tools)
+	case r.Order == transcript.OrderFirst:
+		return fmt.Sprintf("%s: first — %s loaded before any work", r.Transcript, r.Skill)
+	default:
+		return fmt.Sprintf("%s: UNRECOGNISED VERDICT %q — this reader is older than the "+
+			"scorer that produced it", r.Transcript, r.Order)
+	}
 }

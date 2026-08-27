@@ -1,7 +1,7 @@
 github.com/BurntSushi/toml v1.6.0 h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=
 github.com/BurntSushi/toml v1.6.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
-github.com/StevenACoffman/skillet v0.22.0 h1:M0MBaBgav0DYBDj7KpH0Xj3tyanRAWHR0XAZ8SZLM5Y=
-github.com/StevenACoffman/skillet v0.22.0/go.mod h1:ASlQ3/6uPMnxVKEQUaYnqcB0ch9zBdRg8e0NLmlI0qE=
+github.com/StevenACoffman/skillet v0.24.0 h1:9YCxYjGSWKxRLG+QVN9Ajk376xfitDL1hWsQng+cGDQ=
+github.com/StevenACoffman/skillet v0.24.0/go.mod h1:ASlQ3/6uPMnxVKEQUaYnqcB0ch9zBdRg8e0NLmlI0qE=
 github.com/StevenACoffman/toerr v0.1.0 h1:Bd9cPe/iAiFd9boP6fNcwkyJW7lwEKQtksWbbKVwNG0=
 github.com/StevenACoffman/toerr v0.1.0/go.mod h1:AdIwfFGbcKfzztZts0uNo621iylYWOjGQL1YeFw3H1E=
 github.com/goccy/go-yaml v1.19.2 h1:PmFC1S6h8ljIz6gMRBopkjP1TVT7xuwrButHID66PoM=

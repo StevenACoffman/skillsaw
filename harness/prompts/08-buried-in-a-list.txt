@@ -1,6 +1,11 @@
 # the request is one item among several, so the others may be serviced first
+# The neighbours are answerable from the conversation on purpose. They used to include
+# "check whether the config file still has the old timeout in it", which has no referent in
+# an empty working directory: under plan mode that was two refused reads, and once the agent
+# could act it became dozens of shell commands ranging across the filesystem, most of the
+# run's cost, and a verdict about neighbour-servicing rather than about burial.
 A few things, whenever you get to them:
 
-- Check whether the config file still has the old timeout in it
-- {{SKILL}}, please — {{TASK}}
 - Remind me what we decided about the naming convention
+- {{SKILL}}, please — {{TASK}}
+- And why did we land on the shorter timeout in the end?
