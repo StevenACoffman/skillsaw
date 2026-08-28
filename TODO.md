@@ -2739,6 +2739,21 @@ and a regression-relative gate would cost it that property permanently for one c
   and cannot be *newly* orphaned, and the result is advisory because an intentional removal
   legitimately orphans something.
 
+  **No `Axes.Edges`, and the reason is worth keeping.** Corrected 2026-08-27 after a
+  separate finding challenged it. `TestPromptsHash` earns an axis because test-prompts are
+  a *separate file*, so "only the prompts changed" is a state the control test constructs.
+  Edges live inside SKILL.md, so an edge change always moves `Hash` — `Edges ⇒ Skill`,
+  always — and the matching control row describes a state no real tree can produce. Once
+  the targets are stored the refinement is computable from them anyway, and a stored bit is
+  a second thing that can disagree with its own data. The **field** is unaffected: a hash
+  says the body moved and cannot say what the old adjacency was.
+
+  **The pure core here is already agnostic about this, which is the right shape.**
+  `orphan.Compare(base, cur []related.Node)` takes two node sets, not two manifests, so the
+  storage decision only ever affects how a caller reconstitutes `base`. Keep it that way —
+  a `Compare` that took manifests would bind the comparison to one way of remembering
+  yesterday.
+
   **`BaseAvailable` is derived, not declared.** Absent edges mean *unknown* (a manifest
   written before the field existed); `[]` means known-to-declare-none. Collapse the two and
   the first run against an old manifest reports every node as newly orphaned.
