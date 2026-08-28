@@ -28,6 +28,7 @@ import (
 	"github.com/StevenACoffman/skillsaw/cmd/judge"
 	skillsawlog "github.com/StevenACoffman/skillsaw/cmd/log"
 	"github.com/StevenACoffman/skillsaw/cmd/ordering"
+	"github.com/StevenACoffman/skillsaw/cmd/orphans"
 	"github.com/StevenACoffman/skillsaw/cmd/portable"
 	"github.com/StevenACoffman/skillsaw/cmd/preflight"
 	"github.com/StevenACoffman/skillsaw/cmd/regression"
@@ -57,6 +58,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	gate.New(r)
 	history.New(r)
 	ordering.New(r)
+	orphans.New(r)
 	portable.New(r)
 	regression.New(r)
 	judge.New(r)

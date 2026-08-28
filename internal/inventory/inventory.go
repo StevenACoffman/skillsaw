@@ -11,11 +11,15 @@ import (
 
 	"github.com/StevenACoffman/skillet/identity"
 	"github.com/StevenACoffman/skillet/manifest"
+	"github.com/StevenACoffman/skillet/related"
 	"github.com/StevenACoffman/skillet/skill"
 )
 
 // promptsFile is the test-prompts filename this family writes, everywhere.
 const promptsFile = "test-prompts.json"
+
+// skillFile is the document every skill directory is identified by.
+const skillFile = "SKILL.md"
 
 // Entry reads one skill directory into its manifest record.
 //
@@ -70,4 +74,38 @@ func Location(tree, dir string) string {
 		return filepath.ToSlash(rel)
 	}
 	return filepath.ToSlash(dir)
+}
+
+// Graph walks root and reads every skill's related-skills edges.
+//
+// The parse is skillet's. related.ParseSection handles six bullet dialects, fenced sections
+// and wrapped rationales, and a second reading of "what is an edge" would disagree with it
+// at exactly those margins -- which is the reason the orphan check compares two trees rather
+// than a tree against recorded edges: both sides go through this function, at one version.
+//
+// A skill whose SKILL.md cannot be read is skipped rather than fatal, matching Tree: one
+// unreadable directory in a corpus of hundreds must not discard the rest, and a skill that
+// is not there points at nothing and is pointed at by nothing.
+//
+// Requires: root contains skill directories.
+// Ensures:  one Node per readable skill, in discovery order, Slug being the directory name.
+func Graph(root string) ([]related.Node, error) {
+	dirs, err := skill.Discover(root)
+	if err != nil {
+		return nil, fmt.Errorf("discover skills under %s: %w", root, err)
+	}
+	nodes := make([]related.Node, 0, len(dirs))
+	for _, dir := range dirs {
+		b, err := os.ReadFile(filepath.Join(dir, skillFile))
+		if err != nil {
+			continue
+		}
+		body := string(b)
+		nodes = append(nodes, related.Node{
+			Slug:  filepath.Base(dir),
+			Body:  body,
+			Edges: related.ParseSection(body),
+		})
+	}
+	return nodes, nil
 }
