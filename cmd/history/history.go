@@ -81,11 +81,13 @@ func (cfg *Config) render(rows []auditlog.Row) {
 	_, _ = fmt.Fprintln(tw, strings.ToUpper(strings.Join(auditlog.Columns(), "\t")))
 
 	shown, kept, reverted := 0, 0, 0
+	matched := make([]auditlog.Row, 0, len(rows))
 	for i := range rows {
 		r := &rows[i]
 		if cfg.Skill != "" && r.Skill != cfg.Skill {
 			continue
 		}
+		matched = append(matched, *r)
 		shown++
 		switch r.Status {
 		case auditlog.StatusKeep:
@@ -99,4 +101,23 @@ func (cfg *Config) render(rows []auditlog.Row) {
 	}
 	_ = tw.Flush()
 	_, _ = fmt.Fprintf(cfg.Stdout, "\n%d row(s): %d kept, %d reverted\n", shown, kept, reverted)
+	cfg.renderStreak(auditlog.CurrentStreak(matched))
+}
+
+// renderStreak reports the current run of non-improving experiments, and stays silent when
+// there is none -- a line reading "0 consecutive failures" after every successful run is
+// noise that trains the reader to skip the place the warning will appear.
+func (cfg *Config) renderStreak(s auditlog.Streak) {
+	if s.Length == 0 {
+		return
+	}
+	// Naming the harness share is the point of splitting them: a streak that is mostly
+	// errors says to go and look at the check, not at the skill.
+	_, _ = fmt.Fprintf(cfg.Stdout,
+		"%d consecutive non-improving experiment(s), %d of them harness errors\n",
+		s.Length, s.Errors)
+	if s.Errors == s.Length {
+		_, _ = fmt.Fprintln(cfg.Stdout,
+			"  every one failed to run; this is evidence about the harness, not the skill")
+	}
 }

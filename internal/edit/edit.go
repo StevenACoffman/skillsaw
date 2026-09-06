@@ -18,6 +18,14 @@ import (
 // DefaultMaxGrowth is the size ceiling an edit may reach, as a multiple of the text it
 // replaced. Darwin's ratio: an edit that grows a skill by half again has stopped being an
 // edit and become a rewrite, whatever it scored.
+//
+// This is the only thing in skillsaw that rewards brevity, and it sits in an optimize
+// loop's path, so the caution belongs here: **concision can trade against efficacy**. A
+// surveyed compression campaign micro-tested every cut with subagent probes and found one
+// deletion of apparently redundant prose that measurably degraded behaviour; it was
+// reworked rather than shipped. Nothing here can detect that. A ceiling is defensible
+// because unbounded growth is its own defect, but it is a budget rather than a goal, and
+// an edit that comes in under it has not thereby been shown to be better.
 const DefaultMaxGrowth = 1.5
 
 // WithinSizeBudget reports whether an edited skill of newBytes stays within

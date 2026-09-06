@@ -412,7 +412,11 @@ None of these need a skillet change. Where one would have, skillet already has i
       `test-prompts.json` is noted, not fatal (presence is `verified`'s gate). Verified on
       the real corpus: e.g. `books/hashimoto` reports `table-driven-named-cases: 8/8` and
       exits 1. Original entry follows.
-- [ ] ~~**A report of which cases still lack `checks`, scoped to a directory.**~~ Follows from
+- [x] **A report of which cases still lack `checks`, scoped to a directory.** **Shipped as
+      `skillsaw checks --tree DIR [--json]`**, which is exactly what this entry describes,
+      down to counting behavioral cases only and exiting non-zero while any remain. It was
+      struck through in prose and the checkbox was never ticked, so it read as outstanding
+      for weeks. Original entry: Follows from
       the 2026-08-08 decision to author checks corpus-wide *with a directory limit* (see
       `skillsaw-skill/TODO.md`): the work is taken in parts, so "how much is left here"
       has to be answerable without re-running the ad-hoc measurement that produced the
@@ -429,7 +433,12 @@ None of these need a skillet change. Where one would have, skillet already has i
       of it; this is a walk and a tally, with no new logic. Note it reports a *gap*, it does
       not fill one: writing checks is authoring work no tool can derive (see the entry
       below for the measurement behind that).
-- [ ] **MEASURED 2026-08-08: do not build this as written — it would write empty arrays.**
+- [x] **MEASURED 2026-08-08: do not build this as written — it would write empty arrays.**
+  *Recorded finding, not a task.* Nothing is planned here and nothing should be: the
+  measurement's conclusion is that the work is authoring, which no tool derives. The residue
+  it leaves — how much remains — is reported by `checks --tree`, closed above. Kept in full
+  because the measurement is the reason a `--write-checks` command must not be built, and a
+  deleted measurement gets re-proposed.
       Over the real corpus, of **1275 behavioral cases in 183 skills**: 0 carry embedded
       checks, `DeriveChecks` derives checks for **0**, and 1275 yield nothing at all. No
       skill has a single fully scorable case. A `--write-checks` command would write
@@ -478,6 +487,33 @@ None of these need a skillet change. Where one would have, skillet already has i
       `../exegesis/TODO.md`); duplicating it in both is the outcome to avoid.
 
 ## SkillLens dimensions: shared, not private (2026-08-08)
+
+- [ ] **dim 9 recommends the change that harms a wrong-shape skill, and it is reproducible.**
+  `skilllens`' three detectors were validated on one class of skill — the discipline skill,
+  where the failure is *skips a rule under pressure* and a boundary section is the right
+  signal. skillet's package doc now says so (2026-08-23). This entry records the half a doc
+  comment cannot reach: **the author reading a diagnosis.**
+  **Reproduced, not inferred.** A purpose-built wrong-shape skill — a positive recipe, *"A
+  release note IS, in order: 1… 2… 3… 4…"*, which is exactly the form superpowers prescribes
+  for that class — yields:
+  `target: Counter-examples / blacklist [P3] … add counter-examples`.
+  The mechanism is `deriveBlacklist` setting a **base**, not a penalty:
+  `blacklist_empty_base = 2` makes dim 9 the weakest dimension, and `Diagnose` targets the
+  weakest. superpowers' head-to-head reports a prohibition list for this class as *worse than
+  no guidance at all*, so the tool is not merely unhelpful here — it advises a change that
+  makes the artifact worse.
+  **Scoped by measurement: dim 9 only.** dim 5 was checked and is safe — the softening
+  vocabulary is thirteen genuine hedges, and a conditional on an observable
+  (*"if the response has a non-empty `next` cursor, page again"*) scores dim 5 = 10 with no
+  flag. Do not widen this to the other SkillLens dimensions.
+  **No fix is proposed, because none is available.** Gating dim 9 needs a predicate that
+  distinguishes a skill wanting prohibitions from one spoiled by them, and none exists:
+  `markdown.Doc` exposes `HasCodeBlock` and `HasOrderedList`, both orthogonal to failure
+  class. `HasOrderedList` is the near-miss and must not be reached for — plenty of discipline
+  skills number their steps.
+  **Trigger: a derived predicate that distinguishes the two.** Until then this stays open
+  honestly rather than being closed by inventing a classifier from prose, which is the shape
+  refused for dim 3, dim 8 and the ruleset subject slot.
 
 Source: `~/Documents/agent-orange/skillopt_changes_findings.md`, a survey of what
 `microsoft/SkillOpt` and `microsoft/SkillLens` actually contribute to this family.
@@ -584,7 +620,20 @@ toolkit) for reusable techniques.
       and documenting a workflow nobody runs is how merge-skills ended up instructing
       agents to call commands that do not exist. Wiring it up is the natural follow-on —
       the loop already computes both halves at STEP 5.
-- [ ] A timeseries **regression gate** for rubric quality across skill versions — a CI check
+- [x] A timeseries **regression gate** for rubric quality across skill versions. Done
+  2026-08-23 as `skillsaw regression --skill NAME`, reading `results.tsv` through
+  `internal/auditlog` and calling `timeseries.Detect`. This is the check a fixed threshold
+  cannot make: "above 80" says nothing about a skill that was at 92 and is now at 84.
+  `auditlog.Series` is the pure half, and it **skips rows whose new_score is not a number
+  rather than reading them as zero** — a baseline row records `-`, and folding that in
+  would manufacture a collapse out of a run that measured nothing.
+  `Verdict.Compared == false` prints as `NOT COMPARED` and exits 0. It is an absent opinion,
+  not a pass, and the two are printed differently on purpose; failing the first run of a
+  metric is the failure `MinHistory` exists to prevent, since the only fix is to stop
+  measuring. Verified against dropping the `Compared` branch, which makes the
+  short-history cases read as passes. `--tolerance` defaults to 0 but is documented as a
+  setting to make deliberately: zero tolerance on a noisy metric is how a gate gets
+  switched off. Original entry: — a CI check
       that fails on a quality *drop* vs. the recent baseline, not just a fixed threshold.
       **The math now lives in `skillet/timeseries`** (2026-08-07, available since the v0.11.0 bump): wanting it
       here *and* in exegesis was the 2nd consumer that promoted it.
@@ -715,7 +764,43 @@ Source: a survey of `~/Documents/agent-red` (26 agent-tooling projects). The one
 substantial finding for skillsaw is a single project's treatment of its own rubric, checked
 against `AgentLint/standards/` rather than its README.
 
-- [ ] **Make the rubric data, not a Go table.** `rubric.Dimensions()`
+- [x] **Make the rubric data, not a Go table.** Done 2026-08-23 as
+  `internal/rubric/rubric.toml`, **embedded rather than loaded from a path** — the plan's
+  one departure from this entry, and the reason is in the entry itself.
+  Everything stated here arrives without a load path: a reviewable diff, a `note` per
+  weight recording why it has that value, and an edition derived from the bytes. And a load
+  path is the single change that reopens the vector this entry flags and does not resolve —
+  the tool and the thing it grades live in one repository, so a rubric read from the tree
+  under evaluation is a rubric the optimiser can write. Compiled in, the vector is shut **by
+  construction** rather than by a guard someone has to keep remembering, which is stronger
+  than the "refuse to read one from inside the tree" this entry guessed at. The cost is a
+  recompile to change the rubric; given a repo where the gate and the gated thing live
+  together, that is the feature.
+  **Both recorded traps avoided, and the strict loader still earns its keep** because the
+  embedded bytes go through it on every run rather than behind a flag nobody sets. TOML,
+  with `MetaData.Undecoded()` rejecting a misspelled key by name. No fallback to compiled
+  defaults on any error: `Load` returns an error and no rubric, and `mustLoadEmbedded`
+  panics, which is right exactly once — the bytes are compiled in, so a failure is a
+  malformed source file rather than anything a caller can recover from, and
+  `TestEmbeddedRubricLoads` catches it at build time.
+  Validation is what the compiler used to do: nine dimensions, each number once, weights
+  summing to 100, every response defined, no empty list — **and no dimension without a
+  note**, since a weight with no warrant is a magic number that has merely changed file.
+  Moved: dimensions, the three word lists, and the scoring bands (`>= 3` markers, the
+  counter-example unit bands, the checkpoint base). **Not moved:** the per-defect penalty
+  amounts, scattered through eight check functions. `scoringRevision` still covers those and
+  its comment now says exactly that rather than implying the edition is complete.
+  `Edition()` moved onto `*Rubric` and hashes the document verbatim — so a comment edit
+  moves it too, which is the deliberate trade against hand-picking scoring-relevant fields
+  and silently omitting whichever is added next.
+  **Faithfulness is the arbiter, and it held:** all four of `TestScoresAreStable`'s golden
+  values are unchanged, and the whole suite passed the extraction without edits. Verified
+  against a planted weight change (panics naming `weights sum to 101`) and a planted
+  threshold change (fails the golden and edition tests). Original entry: *Carries a constraint from "A change that
+  loosens a gate may not score as improving it": the rubric being a Go table is the only
+  reason a candidate edit cannot relax its own gate today. Loading the rubric from the tree
+  being scored opens that vector, so this entry has to answer it — most likely by refusing
+  to read a rubric from inside the tree under evaluation.* `rubric.Dimensions()`
   (`internal/rubric/rubric.go:111`) hardcodes the nine weights, and their provenance is a
   code comment — "the reconciled table from spec D1 (dim6 = 5) so the nine weights sum to
   exactly 100". The invariant is asserted in prose and the warrant for each weight is
@@ -755,13 +840,18 @@ against `AgentLint/standards/` rather than its README.
   implemented: **externalising a rubric moves the failure from compile time to load time,
   and the load path is where the strictness has to be paid back.** A lenient loader gives
   up the property that made the hardcoded table trustworthy.
-- [ ] **Their thresholds file states our charter better than we state it.** Its header
+- [x] **Their thresholds file states our charter better than we state it.** Done with the
+  item above: *"Reference values from empirical data. NOT enforced thresholds — skillsaw
+  measures and compares, users decide"* is the first thing in `rubric.toml`, ahead of any
+  number. The entry's point is that the file holding the thresholds is where the temptation
+  to harden a reference into a gate actually arises, so it is there and not in a README
+  nobody opens while editing a weight. Original entry: Its header
   reads: *"Reference values from empirical data. NOT enforced thresholds — AgentLint
   measures and compares, users decide."* That is canonizer's findings-not-scores rule,
   applied to thresholds, in the file the thresholds live in. Worth copying verbatim as the
   first key of whatever we externalize, because the file is where the temptation to harden
   a reference into a gate will actually arise.
-- [ ] **Externalizing weights is how you find the bug.** `weights.json` carries a note
+- [x] **Externalizing weights is how you find the bug.** `weights.json` carries a note
   recording that its dimension weights deliberately sum to **1.10**, not 1.0, because
   `D1-D3` and `SS1-SS4` "were previously emitted by deep-/session-analyzer but silently
   dropped because no dimension owned them" — a coverage defect that only became visible
@@ -769,6 +859,21 @@ against `AgentLint/standards/` rather than its README.
   property is checked by a test, which is stronger; but nothing checks that every
   *deterministic penalty* skillsaw computes is owned by some dimension. That is the same
   class of defect and it is worth a test either way.
+
+  Checked, and **their exact defect cannot occur here**: a check is handed the `*DimScore`
+  of whichever dimension dispatched it, so a penalty is structurally owned and cannot be
+  orphaned. No orphaned check function exists either — all eight are dispatched. The
+  *reachable* defect is different and was unguarded: an arm under the wrong number in
+  `applyChecks`' `switch`, which puts one dimension's finding on another's score while every
+  existing test still passes, because they each assert on the dimension they happen to look
+  at. `TestEachCheckWritesOnlyItsOwnDimension` closes that — one fixture per dimension, each
+  asserting its target recorded something and that no judge-only dimension did. Verified
+  against dispatching dim 9's check under `case 2`: eight subtests fail and name both the
+  wrong owner and the finding that moved.
+  Dim 2 has no deterministic check, which is deliberate and already recorded ("judged
+  outright" in the `Dimensions` comment). The test derives the judge-only set rather than
+  hardcoding it, so adding a check for dim 2 without adding a fixture fails rather than
+  passing unnoticed. No `Deterministic bool` was added to `Dimension`: no consumer today.
 - [x] **Certainty is computed but not mapped to an action.** DONE 2026-08-15 on skillet
   v0.16.0. `Diagnosis` carries `finding.Action` — the shared vocabulary, not a local string,
   which is why the axis went into skillet rather than into canonizer and here separately.
@@ -799,7 +904,28 @@ against `AgentLint/standards/` rather than its README.
   `skillsaw-skill` drives the hill-climbing loop and picks one edit per round, "is this
   finding safe to apply unattended" is a decision the loop is currently making implicitly.
   Cheap: a fixed classification per check, no new measurement.
-- [ ] **Lower priority — a guard the optimizer cannot rewrite.** `gate` runs keep-or-revert
+- [x] **A guard the optimizer cannot rewrite.** Done 2026-08-23, and it was not lower
+  priority: `regression`, shipped two days earlier, was **already wrong in this exact way**.
+  It averaged a skill's recent scores with no notion of which rubric produced them, so a
+  history spanning an edition change compared answers to two different questions — the same
+  defect the edition was introduced to fix one layer down.
+  Two halves. `auditlog.Row.Rubric` records the edition, defaulted by `log` to the current
+  one so a caller cannot forget and cannot supply a stale one. And `regression` refuses to
+  compare across editions: `auditlog.Editions` reports the distinct ones in a history, and
+  more than one routes to the existing `NOT COMPARED` third state rather than a new
+  verdict. An edit to the rubric that raises every score can no longer be laundered through
+  the ratchet's own history, because the history declines to average across it — and
+  equally, a real regression is not reported on the strength of numbers that are not
+  comparable.
+  **The column is tenth and rows read with nine or ten.** Promoting `Columns()` to a
+  required ten would have failed every log already on disk, and a format change that
+  invalidates the history is a poor way to start recording history properly. Empty means
+  the row predates the column, which is not the same as matching — the same fail-closed
+  reading `scores.Entry.Rubric` uses.
+  The entry proposed hash-pinning the standards file in the audit row; that is what this
+  is, with the edition standing in for the file hash since the rubric is compiled in.
+  Verified against ignoring the recorded edition, which makes the mixed-history case report
+  a verdict again. Original entry: `gate` runs keep-or-revert
   for skill self-improvement. `4x` pairs its self-evolution loop with a value gate carrying
   explicit anti-hack checks and a self-modification scope guard. The analogous question
   here: nothing structurally prevents an edit to the rubric that raises every score, since
@@ -843,8 +969,41 @@ tool is built from. Checked against the code; one earlier claim is retracted.
   **This does not belong in `eval`** — skillsaw never calls a model, and measuring Δ
   requires running one. It belongs beside `calibrate`, consuming outcome data produced
   elsewhere, exactly as `calibrate` consumes judge scores today.
-- [ ] **A verdict taxonomy richer than accept/reject, for the axes that actually have
-  variance.** `agent-blue/cc-thinking-skills/evals/run-replication.js` exposes a **pure,
+- [x] **A verdict taxonomy richer than accept/reject, for the axes that actually have
+  variance.** Done 2026-08-23, both halves — and **measuring 60 real skills first rewrote
+  both of them.**
+
+  **`REPLICATION-MISSING` was a live defect, not a taxonomy nicety.** A skill with no
+  `test-prompts.json` made `activation` abort the whole run with a usage dump, and so did a
+  directory with prompts but no `SKILL.md`. Both were hit by accident while gathering
+  evidence: one missing file discarded a 50-skill batch. Absence of evidence was not merely
+  collapsed into failure, it was collapsed into a fatal error that threw away every result
+  already computed. Now each such skill is reported `UNMEASURED` with its own cause — "no
+  test-prompts.json" versus "no readable SKILL.md" — the run continues, and the exit is
+  still 1, *after* reporting rather than instead of it.
+
+  **`CEILING-NEEDS-HARDER-DATA` as filed has no instance.** The entry says a saturated set
+  is "reported today as a good score". Over 60 skills with real prompt files: 60 targets of
+  which **0 fire**, 38 distractors of which **0 fire**, 42 skills with no type-tagged
+  prompts at all, and all 60 already gating `unresolved` — so the noise floor added two
+  sessions ago catches precisely the case the entry worries about. Nothing is saturated;
+  nothing fires.
+
+  The real and silent state is narrower and sits in the same numbers: **a decoy that never
+  fires is not evidence of precision.** `FP == 0` is either perfect precision or trivial
+  decoys and the matrix cannot tell them apart, while a skill with *zero* distractors
+  printed `FPR 0.00 (0/0)` — a precision figure computed from nothing, in the column beside
+  ones computed from something. `noise.EvidenceIn` now reads which halves of the matrix a
+  sample supports, and the caveat names the repair, because "no decoys" and "easy decoys"
+  want different work. Reported, never gated: `--min` stays the only thing that fails a
+  run, and a clean FP over a genuine decoy set is a real perfect score.
+
+  On the corpus it splits exactly along the measured line: 42 "nothing here was measured",
+  18 "no decoy ever fired".
+
+  **No ninth word was added.** This is the same idea the codebase already spells eight ways;
+  the doc comment lists them and points at `EVIDENCE.md`, which gained the row this makes
+  true. Original entry: `agent-blue/cc-thinking-skills/evals/run-replication.js` exposes a **pure,
   I/O-free `verdict()`** over six values: `ELEVATE`, `DIRECTIONAL-NOT-REPLICATED`,
   `NO-LIFT`, `QUARANTINE-REDIRECT`, `CEILING-NEEDS-HARDER-DATA`, `REPLICATION-MISSING`.
   Our *Deliberately NOT absorbed* note above correctly rejected cluster bootstrap / Holm /
@@ -858,7 +1017,20 @@ tool is built from. Checked against the code; one earlier claim is retracted.
   - **`REPLICATION-MISSING`** — absence of evidence gets its own verdict rather than
     collapsing into failure. Same discipline as `skillet/timeseries`'s `Verdict.Compared`
     and `ratchet`'s refusal to promote on a tie.
-- [ ] **Evidence-as-authority, and an explicit list of claims we are allowed to make.**
+- [x] **Evidence-as-authority, and an explicit list of claims we are allowed to make.**
+  Done 2026-08-23 as `EVIDENCE.md` plus `TestNoUnauthorizedClaims`, which is the half that
+  survives: a list of claims nobody may make is a list nobody re-reads, so the rule is
+  checked against the repository's own shipped documents rather than trusted.
+  The document states what each output claims and what it does not, in a table, and says
+  outright that nothing here measures lift. It also records the two measured blind spots
+  from the mutation table, on the principle the source names — publish them rather than
+  hide them.
+  **`validated` is deliberately not matched as a bare word.** It flagged three uses on the
+  first run, all of them ordinary input validation (`a validated constructor`, `a status
+  validated on write`). A check that cries wolf is a check somebody deletes, which §9 lists
+  as a red flag by name, so the claim sense is matched by phrase and the engineering sense
+  is left alone. `EVIDENCE.md` says so, to stop the next reader "fixing" the list.
+  Verified against a planted "proven to improve skills" in `README.md`. Original entry:
   `cc-thinking-skills/analysis/AUDIT.md` opens with a table pinning `analysis/evidence.json`
   by SHA-256 *and* the registry it references by SHA-256, then states: "If this narrative
   disagrees with the JSON, **the JSON wins**", a global disposition of
@@ -894,12 +1066,39 @@ tool is built from. Checked against the code; one earlier claim is retracted.
 Source: a survey of `~/Documents/agent-fuschia` (26 repositories). One substantial item,
 and it is the strongest version yet of a question this repo has circled twice.
 
-- [ ] **The rubric checks are evals, and nothing proves they would catch a defect they
+- [x] **The rubric checks are evals, and nothing proves they would catch a defect they
   lack a fixture for.** `agent-fuschia/evalmut` is mutation testing for eval suites, and its
   opening question is the one to answer here: *"Your eval suite passes. Does it actually
   check anything?"* It takes a case the grader passed, injects a **known** defect, and
   reruns; a grader that still passes has a **hole**. Two properties make it more than a
   fault-injection harness:
+
+  Done 2026-08-23 as `TestKnownDefectsAreNoticed`, which injects a known defect into the
+  **artifact being graded** and asks whether any dimension notices. Not source mutation:
+  that tests "is this test wired up", which the per-change planted controls already do one
+  at a time, and it is not the question the entry asks. Injections come from what this
+  corpus was measured to contain, not from reading the checks — writing them from the
+  checks would guarantee they all pass and prove nothing.
+
+  **The first measure was wrong and the run said so.** "Noticed" started as "some
+  dimension's score dropped", which filed two cases as holes that are nothing of the kind:
+  dim 8 on a case with no checks, and dim 3 on a failure heading over a body that executes
+  nothing. Both *report* and decline to dock — dim 8 is NeedsJudge and dim 3 will not charge
+  for a runtime failure in something with no runtime. The measure is now three-valued
+  (`docked` / `reported` / `blind`), which keeps the distinction between a rubric that is
+  blind and one that names a defect and defers the price to a reader.
+
+  **Two genuine blind spots, recorded rather than closed:**
+  - **Assertions that assert nothing.** A case whose `expected` holds activation prose and
+    whose check repeats a word from it is fully scorable and says nothing about behaviour.
+    Dim 8 counts scorability, not meaning.
+  - **Boundary items that are filler.** Dim 9 counts units; three rows of filler score as
+    three real counter-examples. This is the defect `Response = additive` already records.
+
+  Neither is filled, deliberately: a deterministic proxy for either would be a new
+  feedable dimension, which is what the first one already is. Both are declared in the
+  table with a reason, and the test fails if one *closes* without the declaration being
+  updated — a hole that gets fixed must be recorded as fixed.
   - **The defects are mined from documented real-world eval failures, not invented.** Its
     examples are the shape our deterministic checks are exposed to — a `contains("42")`
     check passing *"I did NOT reach 42"*; a presence check on a `count` field saying nothing
@@ -944,7 +1143,32 @@ it says the score and the thing the score is for are different claims.
 
 ### The Ratchet
 
-- [ ] **A `PASS → FAIL` transition is its own status, not another failure.**
+- [x] **A `PASS → FAIL` transition is its own status, not another failure.** Done
+  2026-08-23 as `rubric.TransitionOf` and `DiagnoseAgainst`, reached via
+  `diagnose --against PREV.json`.
+  **The input had to be designed before the field could exist.** `Diagnose` is pure over one
+  evaluation and nothing in the process holds a previous one. Two candidate sources existed
+  and only one works: `results.tsv` records which dimension a row *targeted* and the run's
+  total, never per-dimension scores, so the audit log cannot answer this. An earlier
+  `eval --json` can, since `Evaluation` already serialises every `DimScore`. Hence
+  `--against`, reusing `preflight`'s idiom rather than inventing a second spelling of
+  "the state before".
+  **Two guards this needed and did not have.** `Evaluation` recorded no rubric edition, so
+  the comparison would have shipped the exact defect the previous two sessions closed one
+  layer up — dim 4 scoring 9 then 7 means nothing if the checkpoint band moved between them.
+  `Evaluation.Rubric` was added first and a mismatch routes to `TransitionNotCompared`,
+  the same third state `regression` uses rather than a fourth spelling of it. And
+  **"clean" is not `Final == 10`**: dims 4, 6 and 9 derive bases below 10 by design, so a
+  transition defined as "left 10" would fire on nothing for three dimensions. The comparison
+  is against the dimension's own prior score, on `Final` rather than `Penalty` — a derived
+  base falling 9 to 2 carries no penalty either side and a check on `Penalty` looks straight
+  past it. Verified with a plant that does exactly that.
+  Noticing the transition changes the recommendation, which is the point: a regressed target
+  is told to read the diff since the earlier evaluation rather than rework the dimension.
+  **No failure counter was added.** The entry's argument is that a transition must not
+  increment one, and skillsaw has none — `auditlog.CurrentStreak` counts experiments, not
+  dimensions. Building one in order to not increment it would be building the thing the
+  entry warns about. Original entry:
   `oh-my-agent`'s judge protocol emits `REGRESSED` exactly once on the transition and
   explicitly does **not** increment the failure counter for it, because a regression
   routes differently: it ships the diff between the last passing iteration and now, so
@@ -953,18 +1177,38 @@ it says the score and the thing the score is for are different claims.
   `improved`/`tie`/`regressed` on `Status` — what is missing is that a *dimension* that
   previously scored clean and now does not is a different event from one that has never
   been clean, and `diagnose` cannot currently say which it is looking at.
-- [ ] **Re-score every dimension each iteration, including the ones that passed.**
-  *"Because fixing C2 is how C1 silently regresses."* Needs checking first: if the
-  ratchet already re-scores the whole rubric this is a no-op and the entry should say
-  so. If it re-scores only what it edited, it cannot see a regression its own edit
-  caused, which is the failure mode the hill-climbing loop is most likely to produce.
-- [ ] **A failure counter must count *consecutive* failures and reset on success.**
+- [x] **Re-score every dimension each iteration, including the ones that passed.**
+  Checked, and it was a no-op: `Evaluate` → `EvaluateWithBases` iterates the whole of
+  `Dimensions()` with no skip path and no cache, and both callers (`cmd/eval`,
+  `cmd/diagnose`) score freshly loaded skills. The one thing carried between iterations is
+  the set of judge-supplied bases, and `cmd/eval` hashes the skill, refuses to apply stale
+  bases, and names both versions on stderr. What was missing was not the behaviour but a
+  guard on it, since closing an item on an unpinned property is how it reopens:
+  `TestEveryDimensionIsScoredEveryTime` asserts every dimension is scored exactly once and
+  that an edit moves the dimension it touched. Verified against a planted skip of dim 9,
+  which fails it with `scored 8 dimensions, the table has 9`.
+- [x] **A failure counter must count *consecutive* failures and reset on success.**
   Otherwise a dimension that is merely noisy accumulates to a terminal verdict on
   elapsed time. `oh-my-agent` states the reasoning worth keeping next to the code:
   recurring flakiness should surface as repeated regressions — a signal about the
   *check* — rather than as a permanent verdict about the thing checked. Three surveyed
   projects converge on the same shape (consecutive, resets on progress, small *N*).
-- [ ] **Estimate the evaluator's noise floor before calling any delta an improvement.**
+  There was no counter to fix — `ratchet.Evaluate` is stateless per call and the loop lives
+  in `skillsaw-skill` — so the deliverable is making consecutiveness *computable and
+  reported*, which is what stops a consumer accumulating on elapsed time.
+  `auditlog.CurrentStreak` folds the log into its tail run, counting back from the last row
+  and stopping at the first `keep` or `baseline`.
+  It returns a `Streak{Length, Errors}` rather than an int, because the entry's own
+  reasoning forces the split: a `revert` is a measured regression (evidence about the skill)
+  and an `error` is an experiment that failed to run (evidence about the harness). Fusing
+  them lets a broken check masquerade as a skill that keeps getting worse, and the two want
+  opposite responses. `history` reports both and says so outright when every failure in the
+  streak was a harness error. An unrecognised status counts toward the streak rather than
+  ending it — fail-closed, since an unknown status is not evidence the run went well.
+  Verified against two plants: counting from the front (the recovery case then reports a
+  streak of 2 instead of 0) and fusing errors back into the total.
+- [x] **Estimate the evaluator's noise floor before calling any delta an improvement.**
+  Done for `activation`; see the follow-up below for `judge`.
   `ruflo`'s optimisation log accepts `+0.0028` and `+0.0046` on single runs and rejects
   `−0.0002` and `−0.0004` as *"essentially flat"* — accept and reject thresholds an
   order of magnitude apart, with no variance estimate and no re-measurement of the
@@ -972,12 +1216,84 @@ it says the score and the thing the score is for are different claims.
   itself, and it applies squarely to anything sampled: `activation`, `judge`, and any
   future measured-lift number. `internal/stats` already has Wilson; the missing piece
   is refusing to accept a delta that does not clear the interval.
-- [ ] **A change that loosens a gate may not score as improving it.** `ruflo`'s loop
-  raised a promotion rate by relaxing the promotion predicate from `AND` to `OR`,
-  logged *"BIG WIN"*, and committed. Recording the loosening is not enough — it *was*
-  recorded, in prose, as a win. Anything in the rubric or in `gate` that a candidate
-  edit can itself relax has to be excluded from the improvement it produces.
-- [ ] **Audit `rubric.Dimensions()` for count-shaped dimensions.** `ruflo`'s loop moved a
+
+  `internal/noise` now does the refusing for `activation`. `UtilityBound` derives a
+  conservative interval on net utility from the Wilson intervals the report already
+  carries — net utility rises with TPR and falls with FPR, so its extremes over the
+  rectangle of the two intervals are that rectangle's corners, and because targets and
+  distractors are disjoint samples the rectangle covers at least 90%. It is deliberately
+  wider than a true 95% interval would be; calling it 95% would be the borrowed precision
+  the entry objects to. `Gate` returns `clears` / `below` / `unresolved`, and `--min` now
+  gates on the bound rather than the point estimate, so a skill whose interval spans the
+  floor exits non-zero as UNRESOLVED with the fix named (write more test-prompts, do not
+  edit the skill). `VerdictUnknown` is the zero value and the shell treats anything that is
+  not `clears` as a failure, so an unevaluated report cannot read as a pass.
+
+  **This changed default behaviour**: `--min` defaults to 0, so a skill with a handful of
+  test-prompts that used to pass on a positive point estimate now exits non-zero. That is
+  the point of the entry — a two-prompt sample cannot tell a working trigger from a lucky
+  one — but it will surface as new CI failures on small prompt sets.
+- [x] **The same refusal for `judge`.** Done, in a narrower form than `activation`'s, because
+  `judge` has no gate: it emits `mean_soft` and `base` for a reader and for `eval`, with no
+  threshold and no delta. Applying the `activation` treatment literally would have invented
+  a gate. The refusal that belongs here is that **the base must not read as more resolved
+  than the sample supports**.
+  `noise.MeanInterval` is the t interval with the sample standard deviation floored at
+  `1/(n+1)`. The floor is the point: judge cases very often score identically, and an
+  unfloored t interval over identical observations has zero width and reports an exactly
+  pinned mean from three samples. The floor is the rule of succession read as a dispersion —
+  a deliberate assumption, documented as one rather than dressed as a derived bound.
+  Measured over identical observations it leaves 3 cases spanning bases 2–10, 10 cases
+  spanning 8±1, and 15 cases resolving to a single base.
+  Flooring the *half-width* instead was tried first and rejected on measurement: both
+  Hoeffding and the rule of three leave forty identical cases spanning three bases, so
+  `Resolved()` would never fire, and a caveat that never clears is not a signal.
+  `scores.Aggregate` now carries `Interval`, `BaseLow`, `BaseHigh` and a `Resolved()`
+  predicate; `judge --all` prints the supported range and says to score more cases before
+  treating an unresolved base as measured. **No exit-code change** — see above.
+  The generalisation this entry anticipated did *not* happen: `UtilityBound` is specific to
+  a confusion matrix and `MeanInterval` to a bounded mean. They share a package, not a
+  signature, and an interface over two functions with different inputs would be built for
+  symmetry rather than for a caller.
+- [x] **A change that loosens a gate may not score as improving it.** Closed today by the
+  rubric being a Go table: `Config` is only ever built by `rubric.DefaultConfig()` in
+  `cmd/diagnose` and `cmd/eval`, populated from flags, and nothing loads it from disk. A
+  candidate edit changes the skill and never the rubric, so it cannot relax its own gate.
+  **This is a constraint on the rubric-as-data entry** — making the rubric loadable from
+  the tree being scored is exactly what would open this vector, and that entry has to carry
+  the answer with it.
+  The original observation, kept because it is the concrete instance: `ruflo`'s loop raised
+  a promotion rate by relaxing its promotion predicate from `AND` to `OR`, logged *"BIG
+  WIN"*, and committed. Recording the loosening is not enough — it *was* recorded, in prose,
+  as a win. Anything in the rubric or in `gate` that a candidate edit can itself relax has
+  to be excluded from the improvement it produces.
+- [x] **Audit `rubric.Dimensions()` for count-shaped dimensions.** Done, and the answer is
+  in the type rather than in a comment, because a comment about which dimensions an
+  optimiser can feed is exactly what drifts when a threshold is next tuned. `Dimension` now
+  carries a three-valued `Response` beside `NeedsJudge`:
+
+  - **additive** — dim 3 (any branch removes the 3-point penalty) and dim 9 (`units >= 3`
+    reaches base 9). More of what the dimension counts raises the score.
+  - **subtractive** — dim 4. Reasoning said additive; the test refuted it, scoring 10 then
+    9. `finalize` assumes base 10 for a needs-judge dim with no derived base, so *deriving*
+    a base of 9 lowers the score. An `Additive bool` would have recorded that backwards.
+  - **neutral** — the remaining six.
+
+  The audit's finding is worse than "three dimensions are count-shaped": `strategyFor`
+  already tells the optimiser to perform exactly those edits — "insert explicit
+  checkpoints" (dims 1, 2, **4**), "add 'if X fails then Y' fallbacks" (dims **3**, 5),
+  "add counter-examples" (dims 6, 7, **9**) — and `skillsaw-skill`'s hill-climbing loop
+  reads that guidance. So `Diagnose` now appends a caveat naming what does *not* count for
+  a non-neutral dimension, and `Diagnosis.Response` exposes the property so a loop can
+  weigh it without parsing prose. `TestFeedableDiagnosesSayWhatDoesNotCount` requires the
+  caveat on non-neutral dimensions and forbids it on neutral ones, so it cannot spread
+  until it means nothing; verified against a planted removal.
+
+  Deliberately **not** done: no re-tuning of dims 4 or 9 — their thresholds were set
+  against a 233-skill corpus and re-tuning without eval evidence is the change this family
+  refuses on sight — and no deterministic "filler" penalty, since detecting filler needs
+  judgement, which is dim 8's job, and a proxy for it would just be a new feedable
+  dimension. Original entry: `ruflo`'s loop moved a
   harness score 40 → 55 with no capability change, by adding files a presence-counting
   dimension rewarded — and one of those artefacts, a bare symlink created for the
   purpose, is still in its repository root. **Any dimension scored by counting
@@ -1004,8 +1320,22 @@ it says the score and the thing the score is for are different claims.
   would consume is a *baseline observation*, and the observation can be produced
   outside and read in, exactly as `test-prompts.json` already is.
 
-- [ ] **The cheapest half of that is a gate that fires before authoring: the no-guidance
-  control.** *"Always include a no-guidance control. If the control doesn't exhibit the
+- [x] **The cheapest half of that is a gate that fires before authoring: the no-guidance
+  control.** Done 2026-08-23. The entry said *"a field in the evidence, not a check in the
+  scorer"*, and `scores` is the evidence — it already hash-binds what a reader asserted to
+  the text they asserted it about, and a control observation is the same shape: what
+  happened with the skill *absent*, for that version. `scores.Entry.Baseline` records it and
+  `File.Measured(hash)` asks. Empty means **unmeasured**, a third state beside pass and
+  fail, reported by `eval` and blocking nothing — consistent with `finding.Unexamined`,
+  `noise.VerdictUnknown`, and an unresolved base.
+  **A reader/writer asymmetry nearly made the field write-only.** `Marshal` reflects over
+  `Entry`'s tags while `parseEntries` names its fields one by one, so the new field was
+  written and silently dropped on the way back in. Caught by the test, and now pinned by
+  `TestBaselineSurvivesARoundTrip` — Marshal's contract says `Parse(Marshal(e))` yields `e`,
+  and only a test makes that true of a field added later.
+  Not put in `testprompts`: a control observation is evidence about a version, not part of
+  the prompt set, and it would have been a skillet change for something skillsaw owns.
+  Original entry: *"Always include a no-guidance control. If the control doesn't exhibit the
   failure, there is nothing to fix — stop, don't author the guidance."* A skill written
   against a failure the model does not exhibit is pure context cost, and no rubric
   dimension can detect one, because the document is about a real-sounding problem and
@@ -1014,6 +1344,14 @@ it says the score and the thing the score is for are different claims.
   pass and fail and is the same discipline as `unchecked` everywhere else in the family.
 
 - [ ] **`diagnose` cannot separate three repair classes that want opposite edits.**
+  *Half-built 2026-08-24: `harness/meta-why.txt` asks the question, deliberately outside the
+  nine so the runner does not treat it as a phrasing — it is asked after a failure, against
+  the same skill, in a different situation. The README carries the three shapes and their
+  opposite repairs. **No classifier**, and that is the remaining half: assigning a class
+  from prose is the judgement this repo refuses for dim 3, dim 8 and the ruleset subject
+  slot. What is missing is answers to classify, which needs runs against the two real
+  failures already captured (`03-imperative`, `08-buried-in-a-list` on
+  `matryer-decode-valid`).* Original entry:
   `superpowers`' meta-test asks the agent that failed *with* the skill loaded how the
   skill should have been written, and classifies the answer: *"the skill WAS clear, I
   chose to ignore it"* is not a documentation problem and needs a stronger foundational
@@ -1024,15 +1362,22 @@ it says the score and the thing the score is for are different claims.
   classification needs an observation skillsaw does not have; recorded so the shape is
   known when it does.
 
-- [ ] **Brevity can trade against efficacy, and a dimension that rewards it should say
-  so.** `superpowers` ran a branch-wide compression campaign where *"each cut was
+- [x] **Brevity can trade against efficacy, and a dimension that rewards it should say
+  so.** Done 2026-08-23, **and the entry was aimed at the wrong place** — worth recording,
+  since the misfiling is why it sat here for a week looking like rubric work.
+  Verified twice: **no rubric dimension rewards concision.** `Bytes` is recorded and never
+  scored, and `DescriptionMaxRunes` is a cap rather than a reward. The only thing in
+  skillsaw that rewards brevity is `edit.DefaultMaxGrowth`, and it *is* in an optimize
+  loop's path, so the caution belongs on that constant: a ceiling is defensible because
+  unbounded growth is its own defect, but it is a budget rather than a goal, and an edit
+  that comes in under it has not thereby been shown to be better. Original entry: `superpowers` ran a branch-wide compression campaign where *"each cut was
   micro-tested with subagent probes, and the one cut that measurably degraded behavior
   was reworked rather than shipped."* One deletion of apparently-redundant prose
   changed behaviour. Any dimension here that rewards concision is optimising something
   that can trade against the thing the skill is for — the same class of defect as a
   count-shaped dimension, and subtler because the direction feels virtuous.
 
-- [ ] **Validity scope on the SkillLens dimensions.** `superpowers`' *Match the Form to the
+- [x] **Validity scope on the SkillLens dimensions.** `superpowers`' *Match the Form to the
   Failure* classifies four baseline failure types and reports that the guidance form
   fixing one **measurably backfires** on another — *"the prohibition arm produced
   clearly more of the unwanted content than the recipe arm (fully separated
@@ -1044,9 +1389,104 @@ it says the score and the thing the score is for are different claims.
   result on a reference skill is not read as three passes. Matching entry in
   `skillet/TODO.md`, since the detectors live there.
 
+  Stated in `rubric`'s package doc under *What dims 3, 5 and 9 are valid for*: they suit a
+  skill whose baseline failure is a model doing the wrong thing under pressure, a low score
+  on a reference skill is a statement about form rather than quality, and three empty
+  detector results are not three passes. It also records why the dimensions are **not**
+  conditioned on skill class — skillsaw cannot infer the class, and guessing it would
+  silently change what a score means.
+
 ### `activation` Has a Harness Shape Available
 
-- [ ] **Adversarial phrasing corpus + an ordering assertion.**
+- [x] **Adversarial phrasing corpus + an ordering assertion.** The ordering half is done
+  2026-08-23 as `internal/transcript` + `skillsaw ordering --skill NAME TRANSCRIPT...`.
+  **This item is much smaller than I had been calling it.** For several turns I ranked it as
+  a real-agent harness — slow, nondeterministic, needing credentials — and gated four other
+  items behind that. The entry's last paragraph says otherwise: *"This does not make
+  skillsaw call a model."* The runner already exists in
+  `superpowers/tests/explicit-skill-requests/run-test.sh`; skillsaw owed the contract and
+  the scoring, which is ordinary pure Go. The ranking was right and the sizing was wrong.
+  **The entry's own fallback had to be refused.** It offers "a new operator in `judge`'s
+  closed set" as an alternative to a `preceded_by` notion. `judge.Score` takes a **flat
+  string** and every operator is a substring or regex test over prose — `OpToolCalled` is
+  already documented as `"heuristic: contains arg"`. An ordering operator there would search
+  a prose reply for a fact about event sequence, which contradicts the sentence that
+  motivates the item: *"Ordering is not something a prose reply can be trusted to report
+  about itself."* Ordering is a property of a transcript, a different input type, so it got
+  its own reader and verdict.
+  `Order` is four-valued with a fail-closed zero: `not-triggered`, `after-action`, `first`.
+  `after-action` is the state the item exists to name and is **worse** than `not-triggered`,
+  not milder — the agent had the skill, began work without it, then loaded it, so part of
+  the artifact was produced outside guidance it now appears to have followed. Loading a
+  *different* skill first counts as action, since that is work under the wrong guidance
+  rather than preparation for the right one.
+  **The confusion matrix was deliberately left alone.** The entry notes a premature trigger
+  is recorded today as a true positive. It is — but `ratchet.Score` is skillet's, computes
+  from vocabulary overlap, and never sees a transcript; teaching a text proxy about event
+  ordering is not possible, and silently downgrading a TP would move every historical
+  comparison. The verdict is reported alongside instead.
+  **The event shape is inferred, not captured.** No transcript exists on this machine; the
+  format comes from the reference harness's flat greps, which say nothing about nesting. The
+  reader therefore walks the decoded JSON for `type: "tool_use"` rather than indexing a
+  path, and accepts the skill name at the top level or under `input`. Fixtures cover both
+  shapes and **want checking against a real capture.** Verified against binding to one path,
+  which makes the other shape stop parsing.
+  Not done, and left open below: the **adversarial phrasing corpus** itself — nine variants
+  including a pressure phrasing and a pre-summarised workflow. That is prompt authoring plus
+  the existing shell runner, not skillsaw code.
+
+- [x] **The adversarial phrasing corpus.** Done 2026-08-23 as `harness/` — nine prompt
+  templates, `run.sh`, and a README. Scored by `skillsaw ordering`; no Go code was needed.
+  **The reference corpus could not be reused, and copying its shape would have inherited
+  that.** Every prompt in `superpowers/tests/explicit-skill-requests/prompts/` hardcodes
+  `subagent-driven-development` *and* `docs/superpowers/plans/auth-system.md`. The pressure
+  shapes are general; the subject is not. These are templates with `{{SKILL}}` and
+  `{{TASK}}`, so the same nine phrasings point at any skill.
+  **Two of the reference's nine are not phrasings of one request** — they are a second and
+  third skill, checking that explicit request works generally. The entry specifies nine
+  phrasings of *one* request, so those two slots hold two further pressure shapes instead:
+  the request buried in a list of unrelated asks, and a negation sitting next to it.
+  **The control gates the rest, which the reference does not enforce.** `01-bare` is the
+  skill's name and nothing else, it runs first, and if it does not load the skill the run
+  stops. Eight phrasings failing under pressure cannot be told apart from a skill that does
+  not answer to its own name, and only the first is what this corpus measures. Same
+  discipline as the no-guidance control in `EVIDENCE.md`. Verified: a failing control
+  refuses to print the other eight even when all eight would pass.
+  **Scoring is delegated, not re-grepped.** The reference approximates "before" with
+  `head -n LINE | grep -v …`. `skillsaw ordering` parses the events; `run.sh` shells out to
+  it rather than carrying a second, weaker copy of the rule — the drift this family already
+  refuses between a detector and its consumers.
+  **`--transcripts DIR` scores a captured run without an agent.** A harness that needs
+  credentials to exercise cannot be tested, so the plumbing — substitution, layout, control
+  gate, table — is exercised offline against fabricated transcripts, and that same path
+  re-scores a real capture after a scorer change. Verified end to end: all three verdicts
+  render, the control gate fires, the all-clean path exits 0, and `shellcheck` is clean.
+  **Not verified: agent behaviour.** Nothing here has been run against a model. The prompts
+  are written and the pipeline works; what a real agent does with them is unmeasured, and
+  the README says a single run is an observation rather than a property of the skill.
+  **Retargeted to Gemini CLI 2026-08-23**, and it was not a flag swap. Three real captures
+  showed the event vocabulary differs from Claude Code's in three ways at once — the tool is
+  named in `tool_name` not `name`, arguments sit under `parameters` not `input`, and events
+  are flat rather than nested in an assistant message. Worse, **Gemini has no skill tool at
+  all**: it loads a skill by reading the `SKILL.md`, and when that read was refused for being
+  outside the workspace it fell back to a shell `cat` of the same path. A reader that only
+  knew Claude Code's shape would have reported every Gemini run as `not-triggered` — a parse
+  failure wearing a verdict's clothes. `internal/transcript` now recognises both dialects,
+  detecting a skill load by name *or* by a `<skill>/SKILL.md` path among the arguments, and
+  carries a verbatim capture as a fixture.
+  `update_topic` joins the planning allowlist: captured firing immediately before a skill
+  read, carrying only a title and a summary of what the agent was about to do.
+  **`HOME` is no longer isolated, which departs from the reference and costs something.**
+  Gemini discovers skills under `$HOME/.gemini/skills`, so a fresh `HOME` hides the skill
+  being requested and every run reports not-triggered. The reference isolates `HOME` to keep
+  the operator's context out; here the operator's context is where the skill lives. Each
+  phrasing still gets its own empty working directory, and runs read-only in plan mode. The
+  README says plainly that two machines can therefore disagree.
+  Original entry: The other half of the entry above. Nine phrasings
+  of one request — including *"Don't waste time — just read the plan and start dispatching
+  subagents immediately"* and one where the user pre-summarises the workflow, tempting the
+  agent to follow the summary instead of the skill. Authoring plus a runner invocation;
+  `skillsaw ordering` now scores what it produces.
   `superpowers/tests/explicit-skill-requests/` is a working generator of exactly the
   observations `activation` consumes. Its shape: run the real agent under an **isolated
   `HOME`** (so the operator's own context cannot leak into the result), capture
@@ -1068,7 +1508,21 @@ it says the score and the thing the score is for are different claims.
   `activation` reads — the `test-prompts.json` contract already has `type` and `checks`
   and would need a `preceded_by` notion, or a new operator in `judge`'s closed set.
 
-- [ ] **Variance across repetitions as a bindingness metric.** *"When guidance lands, reps
+- [x] **Variance across repetitions as a bindingness metric.** Done 2026-08-24 as
+  `skillsaw ordering --agreement` and `harness/run.sh --repeat N`.
+  **The unit is agreement, not the verdict**, which the entry states and a first reading
+  misses: *"five different interpretations across five reps means the wording isn't
+  binding"*. So three firsts and two after-actions reports as `SPLIT over 5 runs: 3 first,
+  2 after-action` — not as a pass with noise. A majority verdict would hide precisely the
+  case the metric exists to find; verified against a plant that treats a majority as
+  agreement.
+  A single run is reported and **qualified** rather than counted as convergence: one
+  observation is not a property, and `in all 1 runs` would invite reading it as one.
+  Repeated runs group by the filename stem before the first dot, so the runner names them
+  and the scorer needs no flag telling it how its input is laid out.
+  `--agreement` changes what is reported and never the exit rule. A split is a finding; a
+  new gate that failed on disagreement is not what a caller measuring bindingness asked for.
+  Original entry: *"When guidance lands, reps
   converge on the same shape. Five different interpretations across five reps means the
   wording isn't binding."* Dispersion, not mean — a signal about whether the wording
   constrains at all, available from repeated activation runs at no extra cost beyond
@@ -1077,8 +1531,16 @@ it says the score and the thing the score is for are different claims.
 
 ### One Line to Draw, and One Thing Not to Take
 
-- [ ] **A vendor's prose advice is not the machine-readable contract, and the rubric
-  should not treat them alike.** `superpowers` vendors Anthropic's skill-authoring
+- [x] **A vendor's prose advice is not the machine-readable contract, and the rubric
+  should not treat them alike.** Done 2026-08-23, in `rubric.toml` — which is where it can
+  now live, since making the rubric a document gave every dimension a `note`.
+  **Verified that dim 1 mixes the two today.** `speclint` owns the contract (frontmatter
+  keys, `DescriptionMaxRunes`), and dim 1 penalises the description cap *and* filler tails
+  *and* kebab-case naming, the last two being this project's house style. Its note now says
+  which of its checks is which, and records that the house-style half is why the dimension
+  stays `needs_judge` rather than fully derived: a style preference must not be the last
+  word on a score. The document header states the rule, so a dimension added later has to
+  answer it. Original entry: `superpowers` vendors Anthropic's skill-authoring
   guidance verbatim as a reference, accepts the contract from it (`name`,
   `description`, the 1024-character cap), and refuses its prose: *"PRs that
   restructure, reword, or reformat skills to 'comply' with Anthropic's skills
@@ -1184,7 +1646,26 @@ The coupling defect is inherently about a change: a `SKILL.md` rewritten while i
 So it is not a structural-versus-quality question at all, it is snapshot-versus-delta, and
 only one tool here is delta-shaped.
 
-- [ ] **Gate it in `preflight`, once `skillet/manifest` carries the missing hash.**
+- [x] **Gate it in `preflight`, once `skillet/manifest` carries the missing hash.** Done
+      2026-08-23. `manifest.Skill.TestPromptsHash` landed in skillet v0.19.0 and went
+      further than this entry expected: `Diff` now returns `Axes{Skill, TestPrompts}` per
+      changed location, so the comparison was already upstream.
+      Three things were needed here. **`preflight` had to start honouring severity** —
+      `finding` documents that only `SeverityError` blocks, and preflight counted every
+      diagnostic, so no advisory finding was expressible at all. Behaviour-preserving
+      today, since nothing reachable emits a warning. **`scan` never populated the hash** —
+      `cmd/changed` built `manifest.Skill{Slug, Dir, Hash}` and set neither prompts field,
+      so with the new `Axes` a base manifest recording prompts against a current side that
+      does not would have reported "prompts changed" for every skill in the corpus. That
+      reading moved to `internal/inventory`, which `changed` and `preflight` now share, and
+      which also owns the one definition of the location-keying rule that must agree with
+      `Diff`. **`Axes` alone is not enough**: it cannot separate "has prompts, unchanged"
+      from "has none on either side" — both are `TestPrompts: false` — and only the first is
+      a stale pair. The test caught that before it shipped; `edit.Uncoupled` now consults
+      the current entries. An untested skill is a real defect and a different one.
+      `SeverityWarning` + `ActionHuman`, promoted by `--require-coupling`. Verified against
+      reporting on `Axes.Skill` alone, which starts failing the coupled-edit case.
+      Original entry:
       `changed` already computes `manifest.Delta` against a baseline manifest, and
       `manifest.Skill` records `Hash` (of `SKILL.md`) plus `TestPrompts` as a **path, not a
       hash** — so the delta can see prose change and is structurally blind to whether the
@@ -1202,3 +1683,1294 @@ only one tool here is delta-shaped.
       (git does not preserve them, so the check reports nothing on CI and everything after a
       rebase) and `git diff --name-only` (an environment dependency inside what should be a
       pure comparison). A content hash in a manifest is what this family already uses.
+
+## Three Items Transferred From gnosis's Backlog (2026-08-23)
+
+The `Deep Reads` section above records that gnosis's `TODO.md` was the wrong home for
+skillsaw's work and moved it here. Three more of gnosis's entries turned out never to
+have been transferred — a re-read of its backlog on 2026-08-23 found fourteen items
+filed against sibling repositories, of which nine were already here or in `canonizer`
+and `adh` (five of them already **done**) and five were not anywhere.
+
+The accounting matters more than the items. **A backlog that mirrors another
+repository's work goes stale in the direction that flatters**: gnosis was still
+carrying `count-shaped dimensions`, `loosens a gate`, the consecutive counter, the
+re-verification item and the noise floor as open, and all five had been closed here.
+The rule the family already applies to knowledge applies to backlogs: one home, and a
+pointer from everywhere else.
+
+- [x] **No cross-repository skill-identity check, and there should be one.** Done
+  2026-08-23 as `internal/portability` + `skillsaw portable REPO [REPO ...]`. The item was
+  right; **its evidence was wrong on every specific**, which is worth recording since the
+  entry reads as though the convention had been checked.
+
+  | The entry says                                                | Measured over both trees                                                                |
+  | ------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+  | `cognitive-doc-design` is byte-identical across the two repos | It is in **gentle-ai only** — not shared at all                                         |
+  | the convention "verifiably holds"                             | Of 54 distinct names, **one** is shared, and it has **diverged**                        |
+  | `gentle-ai-branch-pr` diverged from a portable twin           | `branch-pr` and `gentle-ai-branch-pr` are **both in gentle-ai**; the pair is intra-repo |
+
+  So the check finds a real violation on its first run — `skill-creator`, different content
+  in both repositories — and that is the argument for it.
+
+  **Two corrections the corpus forced.** Identity is the **declared frontmatter name**, not
+  the directory: a runtime routes on what a skill calls itself, and `skill-creator` sits at
+  `curated/` in one tree and `internal/assets/skills/` in the other. And **a duplicate with
+  identical content is a copy, not a collision** — my first definition flagged any name
+  declared twice in one repository, which produced *five* findings on `gentle-ai`, all of
+  them its own skills embedded twice byte-for-byte under `internal/assets/`. A check that
+  fires on ordinary work is one somebody turns off. A collision is now a duplicate whose
+  copies **differ**; after the fix the pair reports exactly one finding.
+
+  **`skill.Discover` is one level deep**, which is right for a skills tree and wrong for a
+  repository — these keep skills under `community/`, `curated/`, and
+  `internal/assets/skills/`. Passing those subdirectories separately would make one
+  repository look like several and defeat both the collision check and the prefix
+  exemption, so `portable` walks recursively.
+
+  The prefix exemption is derived from the repository's own directory name, and the entry's
+  caveat is real and is in the doc comment: **the check is exactly as good as the naming**.
+  A skill that ought to have been prefixed and was not reports as a portability violation,
+  and nothing mechanical separates those, so the message offers the rename alongside the
+  sync. No default repositories — which checkouts constitute "everywhere" is a fact about
+  one machine. Original entry:
+  `Gentleman-Skills` and `gentle-ai` declare a portability convention in prose —
+  unprefixed names are portable and keep their canonical names, `<tool>-*` names are
+  repo-specific — and it verifiably holds: `cognitive-doc-design` is byte-identical
+  across the two repositories, and `gentle-ai-branch-pr` has legitimately diverged.
+  It holds because one person maintains both, which is exactly the condition that
+  stops holding.
+  A check that same-named unprefixed skills hash alike across a set of repositories is
+  the mechanism this family could supply back, and `skillet/identity.Hash` already
+  does the hard part. The design question is what a legitimate divergence looks like:
+  `gentle-ai-branch-pr` is prefixed and therefore exempt by the convention, so the
+  check is only as good as the naming, and a skill that *should* have been prefixed and
+  was not would report as a violation of portability rather than of naming.
+- [x] **The cache key should carry the rubric edition.** Done 2026-08-23, and the hole was
+  worse than the entry states: there was **no rubric edition anywhere**, and `scores.Entry`
+  keyed judge bases on the skill content hash alone.
+  `Config.Edition()` has two components, because one cannot cover both halves. The **data**
+  — dimension numbers, weights, needs-judge, and the three word lists — is hashed. Not
+  `Name`, `Key`, or `Response`: the first two are labels and the third describes how a
+  dimension reacts rather than what it scores, and folding them in would invalidate every
+  cached grade on a comment edit. The thresholds written in Go cannot be hashed, so
+  `scoringRevision` is a constant the author turns by hand.
+  **`TestScoresAreStable` is what makes that constant more than a comment**: four fixtures
+  with pinned scores, and any scoring change fails there first with a message saying to bump
+  it. I set those golden values by guessing and all four were wrong; they are now measured.
+  `scores.Entry.Rubric` records the edition and `Bases` routes a mismatch to the existing
+  **stale** verdict — right text, wrong rules is as stale as wrong text, and reusing the
+  disposition means no second place has to remember to handle it. Empty is unknown, not
+  current.
+  **Two consequences worth stating.** Every scores file written before today goes stale on
+  upgrade and must be re-judged; that is the fail-closed choice and it is deliberate. And
+  the round-trip test caught that `cmd/scores` — the writer this repo ships — emitted a
+  document its own reader rejected; it now records the edition. `skillsaw hash --rubric`
+  prints it, since a cache key has two inputs and `hash` already provided one.
+  Original entry: gnosis's relay key
+  deliberately omits its `standards/` version, and the reason it can is that the
+  rubric never enters the prompt there — a threshold change cannot stale a model's
+  reply about a source. Here the rubric **is** what is being applied, so a key without
+  it serves yesterday's grade under today's rules, and the failure is silent: the score
+  is returned, it is a number, and nothing says which edition produced it.
+  Whatever identifies the edition has to change when a dimension's *scoring* changes
+  and not when its prose does, or every comment edit invalidates every cached grade.
+- [x] **A known-answer soundness test per rule.** Done 2026-08-23 as `Config.SelfTest`.
+  **Only the negative half transferred, and that is the whole of it.** gnosis's rules are
+  regexes, where "this pattern must match this string" is a real assertion — it caught a
+  pattern whose own example was two characters too short. skillsaw's rules are
+  `strings.Count(prose, term)` and `strings.HasSuffix(desc, tail)`, so a positive example
+  is a string containing the substring and asserts nothing. The entry's own argument
+  carries the weight: the negative case is the one that matters and the one nobody writes
+  unprompted.
+  **The self-test had to be made to share the checks' matcher.** A soundness check that
+  matched by its own rules would report on a rule nobody applies. `SlopHits`,
+  `MarkerHits`, and `HasFillerTail` are now the single definition, called by scoring and by
+  `SelfTest`, and `TestTheChecksUseTheMatchersTheSelfTestChecks` fails if scoring stops
+  using them.
+  **Four false alarms found, and two of my six were my own measurement error.**
+  `FillerTails` is anchored with `HasSuffix` against the *description*, so "run it as needed
+  by the operator's schedule" never reaches it, and `⚠️` matching a real warning marker is
+  correct. The genuine four are recorded in `quiet.go` with reasons rather than fixed:
+  - `首先` / `其次` in `Slop`. The sharpest of them: in a workflow skill these are *step
+    ordering*, which dim 2 rewards, and dim 7 charges a point for each occurrence.
+    **This is an argument for removing them, not a decision** — a word list change moves
+    every score in the corpus and no corpus is at hand to measure by how much.
+  - `STOP` / `CHECKPOINT` in `CheckpointMarkers`, firing on "do not STOP the deployment"
+    and "the CHECKPOINT table". A matcher question rather than a list question — a bare
+    substring cannot tell a marker from a noun — so it belongs with making the rubric data.
+  A tolerated exception that stops firing **fails**, same rule as the mutation table's
+  blind spots. Not run at load today: the lists are a compiled-in Go literal, so a test
+  already is the load-time check; `SelfTest` is a method so a file-backed ruleset can call
+  it later. Original entry: `gate.SelfTest`'s planted-defect
+  control generalised: every rule ships a case it must flag and a case it must not,
+  and the ruleset refuses to load if any rule fails either. gnosis now does this for
+  its §9.3 pattern table — `scan.LoadRules` runs the examples at load rather than in a
+  test, on the argument that a test catches the same defect one commit later and only
+  for whoever ran it — and it paid for itself immediately by catching a pattern whose
+  own positive example was two characters too long to match.
+  **Soundness before completeness**, because trust is more sensitive to false alarms
+  than to misses: a rule that fires on ordinary work gets the whole tool switched off,
+  where a rule that misses something gets it fixed. The negative case is the one that
+  matters, and it is the one a rubric author will not write unprompted.
+
+## `activation` Scores a Description It Could Not Read (2026-08-23)
+
+Found while measuring 60 real book skills for the verdict-taxonomy item. Confirmed on
+skillet **v0.20.0**.
+
+`skill.Load` leaves `Description` empty when the YAML frontmatter fails to parse, and
+records why in `Skill.FrontmatterErr` — a field skillet has carried since **v0.9.0**. Three
+consumers took the guard that field exists for: `internal/lint` stopped comparing a name it
+could not read, `redlines` stopped demanding a trigger from a description it could not read,
+and `speclint` reports the parse error as itself. `skillsaw`'s dim 1 consults it too
+(`internal/rubric/rubric.go:307`, penalty 6, "frontmatter did not parse").
+
+**`cmd/activation` is the one consumer that never took it.** It reads `s.Description`, gets
+`""`, and computes a full confusion matrix against the empty string.
+
+- [x] **Report an unreadable description instead of scoring against it.** Done 2026-08-23.
+  An unscoreable description is now a third unmeasured cause in `scoreDir`, beside the
+  missing `SKILL.md` and missing `test-prompts.json` added earlier the same day.
+  **The guard the entry proposed would have been half a guard.** It named `FrontmatterErr`,
+  and measuring found a second cause with no parse error to catch: a skill whose frontmatter
+  parses cleanly and declares `description: ""` produces the identical output — a full
+  matrix over the empty string, and the same wrong advice. Over the 60-skill corpus the
+  split is **22 unparsed and 8 parsed-but-empty**, so guarding only the documented cause
+  would have left 8 skills scoring silently. The condition is "there is no description to
+  score", and the two causes are reported apart because they want different repairs: a YAML
+  fix versus an authoring one.
+  After the change no skill in that corpus produces a confusion matrix from an empty
+  description: 30 of 60 report `UNMEASURED`, and none of the 30 still scored carries a
+  target. Verified against disabling the empty-description branch, which puts `net_utility`
+  back on a skill with nothing to score.
+  Deliberately no new penalty: `eval` already prices both defects at dim 1 (6 and 3).
+  `activation` only declines to pretend it measured something. Measured over 60
+  book skills carrying real prompt files: dim 1 says the frontmatter did not parse for
+  **22 of 60**; **18** skills carry at least one target; **all 18 are among the 22**;
+  and across the corpus **0 of 60 targets** and **0 of 38 distractors** fired.
+
+  So the entire activation result on this corpus is an artifact: every target-bearing
+  skill was scored against an empty description. There is no evidence here about the
+  overlap proxy's calibration, because it was never given a description — which is worth
+  stating, since a 0/60 hit rate otherwise reads as a damning result about the proxy.
+  The per-prompt explanations make it worse than silent: they say *"target MISSED
+  (description vocabulary misses it)"* when the truth is that there is no description.
+  The fix is the guard the rest of the family already applies — when `FrontmatterErr` is
+  non-nil, report the skill as `UNMEASURED` with that cause rather than scoring it.
+  `activation` already grew an unmeasured state today for a missing `SKILL.md` and a
+  missing `test-prompts.json`; this is a third cause routing to the same place.
+- [x] **The `EvidenceIn` caveat added today misdirects on exactly these skills.**
+  **Subsumed by the item above, and this entry's own prescription was wrong.** I filed it
+  saying the new cause "outranks both existing caveats because it explains them" — an
+  ordering rule. That assumed the caveat still prints. It does not: an unscoreable skill
+  returns before scoring, so the report carries no counts, and `emit` returns before the
+  caveat line anyway. Both protections are independent, which I only learned by planting
+  each: removing either leaves the misdirection absent. So there is no ordering to write,
+  and a reader following the original instruction would have implemented it for a message
+  that never fires.
+  What was real is a contract gap rather than a bug. `EvidenceIn` takes a `*ratchet.Report`,
+  which carries no trace of the description behind it, so nothing in the type stops a future
+  caller handing it one scored against `""`. It now states that precondition with the
+  measurement attached. `TestNoDecoyCaveatWithoutADescription` pins the user-visible
+  outcome and says outright that it does not guard a particular mechanism, because the
+  planting showed it cannot. *A defect
+  in work from this session, recorded rather than left to be rediscovered.*
+  `noise.EvidenceIn` reports "no decoy ever fired: … Write harder decoys." on a report
+  with distractors and `FP == 0`. For all 18 target-bearing skills above that advice is
+  wrong: the decoys are fine, the description is empty, and nothing could have fired.
+  An author following it would write harder decoys and watch the number not move.
+  Fix is small and sits beside the item above — an unreadable description means *neither*
+  half of the matrix is evidenced, and it outranks both existing caveats because it
+  explains them. Ordering matters here the way it does for collision-over-divergence in
+  `portability`: report the cause, not the symptom.
+
+**Corpus note, not a code task.** The 22 unparsed blocks share one shape, already named in
+dim 1's own test: a quoted scalar followed by unquoted text. In this corpus it is
+`source_book: "Working Effectively with Legacy Code" by Michael Feathers (2005) + "…"`.
+Repairing those is authoring work in the books tree; exegesis already handles the parse
+failure gracefully rather than compounding it (its `Skip the name/folder check when the
+frontmatter did not parse` entry, closed 2026-08-06). Recorded here because this is where
+it was measured, and because 22 broken blocks means 22 skills whose `name` is also empty.
+
+## First Harness Run — and the Question It Raises (2026-08-24)
+
+The adversarial phrasing corpus ran against `climax-cli-scaffold` on Gemini CLI 0.46.0.
+**All nine phrasings scored `first`** — including the time-pressure variant (*"Don't waste
+time — just get straight into it and start immediately"*), the pre-summarised workflow, and
+the request buried among three unrelated asks, where the skill loaded before even an
+`ls -la`. Verified by reading the tool sequences, not just the verdicts: every run went
+`update_topic` (planning, allowlisted) → read of `SKILL.md` → work.
+
+- [x] **Is the corpus discriminating, or is it saturated?** **Answered 2026-08-24: it
+  discriminates.** A second subject, `matryer-decode-valid`, scored **7 of 9** — the two
+  failures being `03-imperative` and `08-buried-in-a-list`, against `climax-cli-scaffold`'s
+  clean sweep. So a `first` result is a property of the subject, not a corpus that cannot
+  fail anything.
+
+  **The two failures came from different mechanisms**, which is stronger than two of a kind:
+  - `03-imperative` — `glob` ran first. The agent went looking at the codebase before
+    loading the skill.
+  - `08-buried-in-a-list` — `run_shell_command` with
+    `find . -type f -name "*config*" …` ran first. The prompt's **first bullet** is *"Check
+    whether the config file still has the old timeout in it"*, and the agent serviced that
+    neighbouring ask before reaching the skill request in bullet two. Precisely the failure
+    the prompt was constructed to induce, visible in the command it chose.
+
+  Note `04-time-pressure` passed on both subjects. Pressure alone did not defeat either one;
+  what did was giving the agent something concrete to do first.
+
+  **Limits.** Two subjects, one run per phrasing, a nondeterministic agent, one model, one
+  day. This establishes that the corpus can separate subjects — the question that was
+  asked — and nothing about how good either skill is.
+
+- [x] **Does the no-trigger redline predict ordering failure?** **ANSWERED 2026-08-25: no.
+  The prediction was recorded before the run and the run falsified it.**
+
+  `context-key-collision-prevention` — **not** flagged by the redline, predicted to sweep
+  9/9 — split on **6 of 8** repeated phrasings. Over 24 runs: 15 `first` (62%), 6
+  `not-triggered` (25%), 3 `after-action` (12%). Two phrasings produced `after-action`, the
+  failure mode the redline was supposed to predict, on a skill the redline cleared.
+
+  So a description stating an explicit trigger condition does not protect against the agent
+  starting work first, and the earlier correlation with `matryer-decode-valid` was one
+  subject wide. The hypothesis is closed, not deferred: it was tested and it is wrong.
+
+  **Verified as behaviour, not as a detector gap**, which is the failure mode that would
+  have faked this result. Every `not-triggered` run was inspected: the agent went straight
+  to `grep_search` and `list_directory` without reading the skill. Across all transcripts
+  there are 29 skill loads, all by `read_file` or a shell `cat`, all detected, and no
+  `activate_skill` call anywhere.
+
+- [x] **Single-run corpus results are not reliable, and two earlier ones were single-run.**
+  Completed 2026-08-25: Re-ran both `climax-cli-scaffold` and `matryer-decode-valid` with `--repeat 3`
+  to gather reliable repeated measurements.
+
+  **Results summary:**
+  * `climax-cli-scaffold` achieved **21/24 (87.5%) first runs**:
+    - `01-bare (control)`: 3/3 first
+    - Unanimously `first` in `02`, `03`, `04`, `05`, `06`, `07`, `09` (7 of 8 phrasings)
+    - `08-buried-in-a-list`: unanimously `after-action` (0/3 first)
+  * `matryer-decode-valid` achieved **13/24 (54.2%) first runs**:
+    - `01-bare (control)`: 3/3 first
+    - Unanimously `first` in `03` and `07` (2 of 8 phrasings)
+    - Split in `02`, `04`, `06` (2/3 first each)
+    - Split in `05` (1/3 first, 2/3 after-action)
+    - Split in `08` (0/3 first: 2/3 not-triggered, 1/3 after-action)
+    - Unanimously `not-triggered` in `09` (0/3 first)
+
+  **Findings & Impact:**
+  The 9/9 vs 7/9 single-run comparison was indeed a statistical fluke. Under repeated runs,
+  the true gap is between an 87.5% binding skill (`climax-cli-scaffold`) and a 54.2% binding
+  one (`matryer-decode-valid`). Repetitive measurement is essential to filter out LLM
+  stochasticity and separate true structural resilience from lucky single runs.
+
+- [x] **The harness runs the control once, and this run shows why that is not enough.**
+  Fixed 2026-08-25: under `--repeat N` the control repeats with everything else and must be
+  **unanimously** `first`. A split control now prints its tally and refuses the other
+  eight — verified: a 2/3 control exits 1 having printed zero rows after it. The single-run
+  path is unchanged and now labels itself *"1 run — not repeated"* rather than presenting
+  one sample as a baseline. Original entry:
+  `01-bare` gates every other reading — if the bare request does not load the skill, the
+  other eight are uninterpretable — and `run.sh` captures it exactly once even under
+  `--repeat N`. On a subject where 38% of runs are not `first`, a single control can pass or
+  fail by luck, and a lucky pass silently licenses eight rows that should have been refused.
+  The fix is to repeat the control with everything else and require it to be *unanimously*
+  `first`, since a split control is precisely the case where the rest cannot be read.
+  skillet v0.22.0 carries the fix and skillsaw is bumped to it.** Re-measured over the same
+  286 skills: the trigger redline now flags **1**, down from 5.
+
+  **The prediction, written before the runs rather than after.** The entry that raised this
+  is the one that must not be checked against a rationalised result, so it is recorded here
+  and the run either matches it or does not:
+
+  | subject                            | flagged now | predicted corpus result     |
+  | ---------------------------------- | ----------- | --------------------------- |
+  | `matryer-decode-valid`             | yes         | fails at least one phrasing |
+  | `context-key-collision-prevention` | no          | sweeps 9/9                  |
+  | `option-configuration-patterns`    | no          | sweeps 9/9                  |
+  | `pbt`                              | no          | sweeps 9/9                  |
+  | `webapp-review`                    | no          | sweeps 9/9                  |
+
+  **`matryer-decode-valid` is not independent evidence and must not be counted as such.** It
+  was chosen *because* it was flagged, and it has already failed `03-imperative` and
+  `08-buried-in-a-list`. Its failing again confirms nothing; the four newly-cleared skills
+  are where the hypothesis can actually die. If any of them fails a phrasing, the redline is
+  not predicting ordering behaviour and the earlier correlation was one subject wide.
+
+  **What would make the result meaningless.** All five sweeping, which would say the corpus
+  stopped discriminating rather than that the redline predicts nothing — check the corpus
+  still separates before reading the redline into it. And a single run per phrasing on a
+  nondeterministic agent: `--repeat 3` costs three times as much and is the difference
+  between a verdict and a coin flip, given `03-imperative` has failed exactly once so far.
+
+  Original suspension note follows. **Suspended 2026-08-24 — the signal was broken.** `redlines.checkTrigger` clears a description containing any of `when`,
+  `whenever`, `invoke`, `reach for`, and `before`/`after` (each with a trailing space) — and **the list omits "trigger"**.
+  A description reading `Trigger: user is using context.WithValue …` is flagged as stating
+  no trigger. Confirmed directly against `redlines.Check`, and filed in `skillet/TODO.md`.
+  Two of the operator's five flagged skills are false positives on exactly this. Testing
+  whether the redline predicts ordering failure while it is wrong for a large share of its
+  hits would measure the bug, so this waits on the upstream fix. Original entry: A hypothesis this run
+  raises and cannot settle. `matryer-decode-valid` was chosen *because*
+  `preflight --redlines` flagged its description as stating no trigger — it opens
+  *"Eliminate repetitive decode-then-validate boilerplate…"*, an instruction, where
+  `climax-cli-scaffold` opens *"Invoke when initializing a new Go CLI application…"*, a
+  situation. The weaker description did score worse, as predicted.
+  That is n=2 and the prediction was made by the person reading the outcome, which is the
+  shape of reasoning this repo distrusts everywhere else. Testing it means picking further
+  subjects by the redline **before** running them and recording the prediction first. Of
+  285 installed skills only four are flagged, and three of those state a trigger in a form
+  `speclint` does not recognise (`Trigger:`, `Triggers on:`) — so the flagged population is
+  nearly exhausted, and that near-miss is itself worth a look.
+
+- [ ] *(superseded — kept for the original reasoning)* **Is the corpus discriminating, or is it saturated?** Nine passes on the first subject
+  cannot tell those apart, and it is the same state `noise`'s `CEILING-NEEDS-HARDER-DATA`
+  reasoning names: a suite on which everything passes carries no information about the
+  suite. Two readings fit — the skill and agent genuinely withstand all nine pressure
+  shapes, or the phrasings are not adversarial enough to separate anything.
+  What settles it is a subject that fails. Run the corpus against a skill with a weak or
+  ambiguous description and see whether any phrasing produces `after-action` or
+  `not-triggered`. Until one does, a `first` sweep is not evidence the corpus works.
+  The corpus is cheap to run and the result is one line per skill, so this is a sweep rather
+  than a project — but note the cost: nine agent calls per skill, and one run took ~19
+  minutes when the API errored and retried.
+
+- [ ] **`activation`'s first real measurement, and the question under it.** After the corpus
+  repair, `books/` scores 246 of 277 skills: **recall 373/396 (94%)**, but **false positives
+  156/237 (66%)** — decoys fire two times in three. Gates: 42 clear, 44 unresolved.
+  The FPR has two readings the confusion matrix cannot separate: descriptions over-trigger,
+  or the decoys are drawn from the same book domain and share vocabulary with the
+  description by construction. `ratchet.Score` is salient-term overlap with a five-character
+  minimum, so same-domain decoys would fire on it regardless of how precise a description
+  is. Settling it needs observations of what a real agent does with those prompts — which
+  is what the harness now produces.
+  What is safe to say: the precision half of the matrix is **evidenced** for the first time.
+  Before the repair every FPR in that corpus was computed from an empty description.
+
+**Detector gap found by the first run, and fixed.** Gemini CLI has a dedicated
+`activate_skill` tool that none of three probes reached, because in every captured run the
+agent got to the skill by reading `SKILL.md` first. It names the skill in `parameters.name`,
+which neither the `skill`-key lookup nor the `<name>/SKILL.md` path fallback would have
+caught — a run going straight to it would have scored `not-triggered`. The nine verdicts
+above were correct only because a file read preceded it every time. Recognised now by tool
+name rather than by any `name` parameter, since `name` is far too common to treat as a skill
+reference; the captured event is a test fixture.
+
+## `preflight` Discards a Batch Over One Unloadable Directory (2026-08-24)
+
+Found while using `preflight --redlines` to pick a corpus target: 285 skill directories
+produced nothing, 40 worked. **One directory among them has no `SKILL.md`** —
+`~/.agents/skills/unconventional-commits-workspace/`, a support folder holding
+`check_commits.py` and an `inputs/` tree — and it takes the whole run with it.
+
+- [x] **Report an unloadable directory instead of aborting the run.** Done 2026-08-24, the
+  same shape `activation` took the day before: the directory becomes a defect about itself
+  and the run continues. Confirmed on the real tree — one invocation over 286 skills now
+  reports 286 where it previously reported none.
+  **The abort was hiding a result, not just suppressing output.** Chunking around it had
+  found 4 skills failing the no-trigger redline; the unchunked run finds **5**. Verified
+  against restoring the early return. Sibling audit done as the entry asked: `activation`,
+  `portable`, `eval` and `diagnose` all report-and-continue, so `preflight` was the last.
+  Original entry:
+  `cmd/preflight/preflight.go:147` returns on the first `skill.Load` failure:
+
+  ```go
+  s, err := skill.Load(dir)
+  if err != nil {
+      return fmt.Errorf("preflight: %w", err)
+  }
+  ```
+
+  Two consequences, both observed. Every result already computed is discarded — 284 skills
+  that loaded fine are never reported. And because the error reaches `ff`'s handler it
+  **prints the full usage text**, so a missing file reads as though the caller mistyped a
+  flag.
+
+  **This is the same defect, in the same shape, that `activation` was fixed for on
+  2026-08-23** — see *`activation` Scores a Description It Could Not Read* above, where a
+  missing `SKILL.md` or `test-prompts.json` used to abort a 50-skill batch. That fix
+  introduced a per-skill `Unmeasured` reason, kept the run going, and still exited non-zero
+  after reporting rather than instead of it. `preflight` should route the same way: a
+  directory that cannot be loaded is a defect *about that directory*, not a reason to stop.
+
+  It is not merely cosmetic. `preflight` is the structural gate an optimize loop runs
+  between writing an edit and deciding whether to keep it; a corpus-wide invocation that
+  silently returns nothing because one adjacent folder lacks a `SKILL.md` is a gate that
+  reports clean by failing to run.
+
+  Worth checking the other multi-argument commands for the same shape while fixing this.
+  `activation` and `portable` handle it; `eval` skips-with-a-note; `preflight` and
+  `diagnose` are the ones to look at. `diagnose` already reports and continues
+  (`skip %s: %v` to stderr), so `preflight` may be the last one.
+
+## The Phrasings Are Not Equally Hard, and One Does Most of the Work (2026-08-26)
+
+> **Superseded in part, 2026-08-27.** The table below was computed by an `OrderOf` that
+> reads a parallel tool batch as a sequence. The `08` column — the entry's whole argument —
+> is the column most exposed to that defect, because `08` is the phrasing that provokes a
+> wide concurrent batch. Do not cite the numbers until they are recomputed. See *`OrderOf`
+> Reads a Parallel Tool Batch as a Sequence*, below.
+
+Three subjects have now been run with `--repeat 3`, which is enough to compare *phrasings*
+rather than skills. That comparison lives in no entry — it is visible only by reading three
+per-subject tables against each other — and it is the most transferable thing the corpus
+has produced, because it is a claim about the instrument rather than about any skill.
+
+First-verdict counts, nine runs per phrasing (three subjects x three repeats):
+
+| phrasing                | climax | matryer | ctx-key | total   |
+| ----------------------- | ------ | ------- | ------- | ------- |
+| `04-time-pressure`      | 3/3    | 2/3     | 3/3     | **8/9** |
+| `07-accepting-an-offer` | 3/3    | 3/3     | 2/3     | **8/9** |
+| `02-with-context`       | 3/3    | 2/3     | 2/3     | 7/9     |
+| `03-imperative`         | 3/3    | 3/3     | 1/3     | 7/9     |
+| `05-pre-summarised`     | 3/3    | 1/3     | 3/3     | 7/9     |
+| `06-user-pre-explains`  | 3/3    | 2/3     | 1/3     | 6/9     |
+| `09-negated-nearby`     | 3/3    | 0/3     | 1/3     | 4/9     |
+| `08-buried-in-a-list`   | 0/3    | 0/3     | 2/3     | **2/9** |
+
+**`08-buried-in-a-list` is the instrument.** At 2/9 it is twice as discriminating as the
+next-worst phrasing and four times the field average, and it is the only one that fails a
+subject *unanimously* — 0/3 on both `climax-cli-scaffold` and `matryer-decode-valid`,
+skills whose overall rates are 87.5% and 54.2%. A pressure that defeats the strongest
+subject as completely as the weakest is measuring something the others are not.
+
+**And the pressure everyone expects to matter does not.** `04-time-pressure` — *"Don't
+waste time, just get straight into it and start immediately"* — is joint **best** at 8/9.
+Explicitly telling the agent to skip preliminaries is close to harmless. What defeats it is
+being given something else to do first: `08` buries the request as the second of three
+unrelated asks, and the agent services the first one.
+
+- [ ] **Decide what an unequal corpus means for how it is read and reported.** Two readings,
+  and the data does not choose between them:
+  - **The corpus is working and `08` is why.** Then a subject's headline number is
+    dominated by one phrasing, and reporting `21/24` hides that the failure is entirely in
+    one row. A per-phrasing table should lead, not the total.
+  - **`08` is a different test wearing the same clothes.** The other eight vary *how the
+    request is phrased*; `08` varies *what else is in the message*. That is arguably a
+    distinct axis — competing demands rather than adversarial phrasing — and averaging it
+    with the rest produces a number about neither.
+  Owed before either is adopted: a fourth subject, to check `08`'s dominance is not an
+  artefact of three. If it holds, splitting the report is cheap and the alternative is a
+  headline figure that mostly reports one row.
+
+- [ ] **`09-negated-nearby` may be measuring the wrong thing.** Second-worst at 4/9, and
+  its two failures are `not-triggered` rather than `after-action` — the skill never loaded
+  at all. That is what `activation` diagnoses, not what ordering does. The prompt places a
+  negation next to the request (*"Don't bother with anything heavyweight or
+  process-driven"*), and a skill that then fails to load may be responding to the negation
+  rather than being beaten to the punch. Worth separating: if `09` mostly produces
+  `not-triggered`, it belongs with trigger accuracy and not in a corpus about ordering.
+
+## The After-Action Verdict on `08` Is Partly Built into the Prompt (2026-08-26)
+
+> **Largely superseded, 2026-08-27.** The mechanism proposed here — the agent services the
+> config-file item, then loads the skill — is not what the transcripts show. It issues both
+> at once. The `OrderOf` defect below is the real cause. What survives is the meta-test
+> methodology note, which is restated in the new entry's last item.
+
+The L1346 meta-test was run twice against `climax-cli-scaffold` on `08-buried-in-a-list`,
+and the pair is more informative than either half.
+
+The first run substituted the bare `{{TASK}}` string and lost the surrounding list, so it
+asked about a message that never failed. It answered that the task did not match the
+skill's trigger list (*"initializing a new Go CLI application... adding new subcommands...
+drifted from the canonical ff/v4 pattern"*) and so the skill would not be loaded — an
+account of `not-triggered`. The measured verdict was `after-action` 3/3: the skill *did*
+load. The account explained an outcome that did not occur, and the measurement refuted it.
+
+The second run substituted the real three-item prompt. It answered that it decomposes a
+bulleted list and executes the actionable items in encounter order, and that it treated
+loading the skill as *"one independent task among three, rather than a blocking
+pre-condition for the entire turn"* — naming the config-file search specifically. That is
+an account of `after-action`, and it matches.
+
+**The code says the same thing, and says it is close to forced.** `OrderOf` sets
+`acted = true` on any tool outside `planningTools()`, and the first list item — *"Check
+whether the config file still has the old timeout in it"* — cannot be answered without
+reading a file. So an agent that services the items in the order they are written earns
+`after-action` before it ever reaches the request. The 2/9 rate is at least partly a
+property of the prompt.
+
+**This makes `08`'s `after-action` a different event from `01-bare`'s.** In `01` nothing
+else was asked, so acting before the skill loads means acting on the skill's own task —
+the defect the verdict is named for. In `08` it can equally mean answering a neighbouring
+question and then loading the skill promptly. The two are pooled under one word, and a
+subject's headline number adds them together. This sharpens the second reading in the
+entry above from "arguably a distinct axis" to a mechanism.
+
+- [ ] **Settle per-run whether `08` failures serviced a neighbour or started the subject's
+  own work.** `Before()` already returns exactly this — the non-planning tools that ran
+  ahead of the skill, in order — and a config-file `read_file` reads very differently from
+  an edit to the CLI being scaffolded. Nothing needs writing to answer it. What blocks it
+  is that `run.sh` defaults `--out` to `mktemp -d` and the completed runs were not kept, so
+  the transcripts that would decide it are gone. Re-run the three subjects on `08` with an
+  explicit `--out`, then report `Before()` alongside the verdict.
+
+- [x] **Report the tools-before list wherever `after-action` is reported.** Done 2026-08-27. If the two
+  meanings above both turn out to occur, the verdict alone is not actionable and the fix
+  differs between them. `Before()` exists and is unused by the harness summary.
+
+- [ ] **Constrain the meta-test to the exact failing prompt, and check its answer against
+  the verdict.** Both runs picked the same shape — *"the skill was clear, I chose to start
+  working anyway"* — while giving mechanisms that imply different verdicts, so the shape
+  taxonomy carries little information on its own and the mechanism is the payload. One
+  cheap guard follows: an account that implies `not-triggered` for a run measured
+  `after-action` is refuted, and can be discarded without judgement. Reconstruction from a
+  cold session is a hypothesis; resuming the failing session would be a report, and needs a
+  stable per-phrasing working directory plus `--session-id` in `run.sh`.
+
+## `OrderOf` Reads a Parallel Tool Batch as a Sequence (2026-08-27)
+
+`climax-cli-scaffold` was re-run on all nine phrasings with `--repeat 3` and an explicit
+`--out`, so the transcripts survived and `Before()` could finally be asked. It reported
+`08-buried-in-a-list` as SPLIT — 2 first, 1 after-action — where the previous run had it
+0/3. That instability is the finding: the two runs are the same behaviour.
+
+Both issue a single parallel tool batch, four calls, no result returned in between:
+
+| run 1 — `after-action`   | run 2 — `first`          |
+| ------------------------ | ------------------------ |
+| `update_topic`           | `update_topic`           |
+| `glob **/*config*`       | `read_file` .../SKILL.md |
+| `read_file` .../SKILL.md | `glob **/*config*`       |
+| `read_file` MEMORY.md    | `read_file` MEMORY.md    |
+
+Emitted across 742ms and 576ms respectively; every `tool_result` in both runs arrives after
+the last of the four. **The verdict turns on the emission order of two concurrent calls
+whose results had not come back.** Nothing was learned from the `glob` before the skill was
+read — its output was `No files found`, and it had not yet been delivered.
+
+`OrderOf` walks a flat slice and sets `acted` on the first non-planning tool, so it cannot
+see this: `Read` discards `tool_result` records, and batch structure is gone before
+`OrderOf` runs. The rule it encodes — *work began before the skill loaded* — requires that
+a result was available to work from. Concurrent issuance is not work.
+
+Recomputed over all 27 captured runs, treating a non-planning tool as action only when it
+sits in a **strictly earlier batch** than the skill load: exactly one verdict changes,
+`08-buried-in-a-list.1` from `after-action` to `first`. It was the run's only failure, so
+`climax-cli-scaffold` is 9/9 with no ordering defect at all. The change is strictly more
+lenient, so no `first` can become a failure and the other 26 are unaffected by
+construction.
+
+- [x] **Give `ToolUse` a batch index and make `OrderOf` compare batches.** Done
+  2026-08-27. `Read` numbers batches lazily — the counter advances when a use arrives after
+  a result, not at the result — so the run of consecutive results that ends a four-call
+  batch advances it once. `OrderOf` returns `OrderAfterAction` only when the earliest
+  non-planning use is in a lower-numbered batch than the load; `Before()` filters the same
+  way. All pure.
+
+  Two zero-value rules make it fail closed, and both matter more than the batching itself:
+
+  - **A zero batch means unknown, and unknown falls back to document order** — the stricter
+    reading. Every hand-built slice carries zeros, so the alternative would have quietly
+    voided the existing table.
+  - **A transcript that logs no results at all has its batch numbers withdrawn.** Without
+    results there is nothing to divide batches by, so every use lands in batch 1 and reads
+    as one enormous concurrent burst — clean, always. Found by the `cmd` tests, whose
+    fixtures log uses without results. The tempting fix was to add results to the fixtures;
+    that would have left any real transcript in a result-free format silently passing.
+- [x] **Plant the negative control before trusting it.** Done 2026-08-27, twice. The
+  `Read` table was checked against a plausible wrong implementation — increment at the
+  result rather than lazily — and three rows caught it across both runtime dialects. The
+  `OrderOf` table was run against the unmodified function first: the run-1 row failed
+  `after-action`/`first` and two `Before` rows failed, which is the whole reason the pair
+  is in the file. A row with a genuine result-then-act sequence guards the opposite cheat,
+  since "always return `first`" passes the concurrent rows.
+
+  One caveat on the third test,
+  `TestNumberingEveryUseSeparatelyReproducesDocumentOrder`: it passed before the change as
+  well as after. It is a guard against future loosening of `<` to `<=`, not a control for
+  this one, and should not be read as evidence the change worked.
+- [x] **Re-score the captured corpus.** Done 2026-08-27. `ordering --agreement` over all 27
+  transcripts reports `first in all 3 runs` for every phrasing, exit 0 — one flip from the
+  flat reading, matching the recomputation exactly. `climax-cli-scaffold` has no ordering
+  defect on any of the nine.
+- [ ] **Recompute the phrasing table, and re-ask whether `08` discriminates.** The
+  superseded entry above claimed `08` is the instrument at 2/9. That claim is now
+  unsupported and plausibly backwards: `08` asks for three things, so it provokes the
+  widest concurrent batch, so it has the most chances for a non-skill call to land earlier
+  in the batch. `08` may have been measuring batch width. The `matryer` and `ctx-key`
+  transcripts were written to `mktemp -d` and are gone, so this needs re-running with
+  `--out` before anything is concluded — including whether the corpus discriminates at all.
+- [x] **Have `run.sh` default `--out` to a durable path.** Done 2026-08-27. Three findings in two days have
+  been blocked on transcripts that no longer exist. A run whose evidence is discarded by
+  default cannot be re-examined when the reading of it is questioned, which is exactly when
+  it is needed.
+- [ ] **Restated from the superseded entry: constrain the meta-test to the exact failing
+  prompt, and check its answer against the verdict.** Both meta-runs picked the same shape
+  while giving mechanisms implying different verdicts, so the shape taxonomy carries little
+  on its own. Note that the second meta-answer — decompose the list, execute in encounter
+  order — was *also* wrong: the transcripts show one concurrent batch, not sequential
+  servicing. It was plausible, matched the verdict, and still misdescribed the behaviour.
+  That is a stronger caution than the first failure, because consistency with the verdict
+  was the check proposed for catching this.
+
+## An Unrecognised `activate_skill` Inverts the Verdict (2026-08-27)
+
+A fresh 27-run capture of `climax-cli-scaffold` reported `06-user-pre-explains` as SPLIT,
+2 first and 1 after-action. `Before()` named the tool that supposedly came first:
+`activate_skill`. The run was this, and it is the best-behaved run in the corpus:
+
+```text
+batch1  activate_skill  {"skill_name": "climax-cli-scaffold"}
+batch2  update_topic, read_file .../climax-cli-scaffold/SKILL.md
+```
+
+It activated the skill as its very first tool call, before anything else, and scored
+`after-action` **for having done so**. `skillIn` read the declared skill from `name`, and
+Gemini wrote it under `skill_name`, so the load went unrecognised — and an unrecognised
+`activate_skill` is not ignored, it is an ordinary tool, which counts as work. The verdict
+was not merely wrong, it was the exact inverse of the behaviour.
+
+Both spellings appear in the same 27 runs from the same tool: `skill_name` twice
+(`05-pre-summarised.2`, `06-user-pre-explains.3`) and `name` once
+(`05-pre-summarised.1`). Neither is *the* spelling, which is why the fix is a list rather
+than a corrected constant.
+
+Fixed 2026-08-27, with both spellings checked and a negative control seen to fail: the
+planted single-spelling version fails the unit case and the end-to-end one, the latter
+reporting `Before() blames [activate_skill]`. A row for an ordinary tool carrying a `name`
+parameter guards the inverse mistake — reporting a load that never happened, which is the
+more flattering error and so the one worth pinning.
+
+With this and the batching fix in, all nine phrasings read `first in all 3 runs`, exit 0.
+
+- [ ] **Re-examine every `after-action` ever recorded for this cause.** Two independent
+  defects have now each produced a false `after-action`, and the corpus's entire claim to
+  discriminate rests on that verdict. Neither was visible without opening the transcript.
+  Nothing recorded before 2026-08-27 should be cited until re-scored.
+- [x] **The harness runs whatever `skillsaw` is on PATH, and said nothing about it being
+  three days stale.** Closed by the provenance header below, which also found that the
+  version string alone would not have caught it.
+- [x] **Find the remaining spellings before they cost another verdict.** Answered
+  2026-08-27, and it refuted the fix above. Gemini CLI 0.46.0 documents **one** argument —
+  `name` — in `bundle/docs/tools/activate-skill.md`, and `skill_name` appears nowhere in
+  the bundle. Both captured `skill_name` calls came back *"Tool activate_skill not found.
+  Did you mean one of: write_file, update_topic, read_file"*: under `--approval-mode plan`
+  the tool is absent, and the model invented the call along with the parameter. Honouring
+  it credited a failed call to a non-existent tool as a loaded skill. Reverted the same
+  day; `skillIn` now carries a note so the next reader who meets `skill_name` in a
+  transcript does not re-derive the wrong fix from the same two calls.
+- [x] **`run.sh` reports the instruments it used.** Done 2026-08-27, and the obvious
+  version string was not enough. `skillsaw version` prints `BuildDate` from the *module
+  pseudo-version*, not the build: a `go install` at 09:08 today still reported
+  `BuildDate: 2026-08-25T03:21:10`, so two builds days apart from the same dirty tree are
+  identical in every field it prints. The binary's mtime is the field that differs, and is
+  what the header now carries, alongside the resolved path, `GitVersion`, a dirty-tree
+  warning, and the gemini version when the agent actually ran. Written to
+  `$OUT/provenance.txt` as well as stdout, since the transcripts outlive the scrollback.
+
+## Twenty of Twenty-Seven Runs Never Loaded the Skill (2026-08-27)
+
+Teaching `OrderOf` to skip calls the runtime rejected — the fix for the errored
+`activate_skill` being reported as work done first — turned the control red, and the
+control was right. `01-bare` had been passing 3/3 on two calls that both failed:
+
+```text
+read_file          error: Path not in workspace: "/Users/steve/.agents/skills/
+                          climax-cli-scaffold/SKILL.md" resolves outside the workspace
+run_shell_command  error: Tool execution denied by policy. You are in Plan Mode with
+                          access to read-only tools.
+```
+
+Three ways in, all shut. `activate_skill` is not in the plan-mode tool set; `read_file`
+refuses a path outside the workspace, and the skills live in `~/.agents/skills`; the `cat`
+fallback is denied as script execution. **The agent never read the skill.**
+
+Across the corpus, a load attempt succeeded in **7 of 27 runs**. Re-scored per run:
+19 `not-triggered`, 6 `after-action`, 2 `first`.
+
+Every ordering number this harness has produced under `--approval-mode plan` was awarded
+for a *refused* attempt to read the skill. The instrument was not measuring when the skill
+loaded; it was measuring the order of attempts, and 20 of 27 of those failed. The phrasing
+table, `08`'s apparent discriminating power, the 9/9 sweep from earlier today — all of it
+was scored on transcripts in which the skill was never in context.
+
+The control did exactly what it exists for, three days later than it should have, because
+until today a failed read counted as a load.
+
+- [x] **Decide how the harness gives the agent access to the skill.** Decided 2026-08-27:
+  **drop `--approval-mode plan`.** The re-run itself is the three items below.
+
+  Four options were weighed. Two of them — running from a working directory that contains
+  the skills, and copying the subject skill into each run's workspace — open `read_file`
+  and leave `activate_skill` absent, so they measure the *fallback* path. That is the
+  decisive argument against both: the corpus asks when the skill loads relative to work,
+  and under Gemini the intended mechanism is `activate_skill`, which succeeded in exactly
+  one of 27 captured runs. Either option would produce green numbers while leaving the
+  primary path as untested as it is today, and this week has been a sequence of green
+  numbers that meant nothing. Switching to Claude Code was the fourth, and does not answer
+  the question the corpus asks.
+
+  **What it costs.** The agent can write, edit, and run commands. `capture()` already gives
+  each run a fresh `mktemp -d` working directory and a `timeout 300`, so isolation and
+  runaway are already handled — but an agent with shell access is not confined to its cwd,
+  and runs on the operator's machine with the operator's privileges. That is a deliberate
+  acceptance, not an oversight, and it is the reason this was a decision rather than a fix.
+  Runs also get slower and messier, because prompts like `08` invite the agent to actually
+  do the task.
+
+  **Why the cost is right.** An ordering harness whose agent cannot act cannot observe
+  acting-before-loading, which is the one thing it measures. Plan mode was not only blocking
+  the skill; it was blocking the failure mode. Expect the numbers to get *worse* — every
+  `first` in the corpus so far was awarded for a refused read — and expect that to be the
+  first evidence the instrument works.
+- [x] **Drop plan mode in `capture()`, and say in the comment what that admits.** Done
+  2026-08-27, and the title understated it: `--approval-mode` has four values, and two of
+  the three alternatives to `plan` would have reproduced the bug. `default` prompts for
+  approval, and `capture()` runs with stdin closed, so a tool needing approval is denied or
+  stalls to the 300s timeout — the same failure by another route, and one that would have
+  read as a fresh finding. `auto_edit` leaves `run_shell_command` needing approval, so the
+  `cat` fallback stays shut. Only `yolo` is genuinely non-interactive. Exposed as
+  `--approval-mode`, defaulting to `yolo`, so `plan` can still reproduce the pre-2026-08-27
+  corpus, and recorded in the provenance block because the mode decides what a run is *able
+  to observe* rather than merely how it behaves.
+
+  **Two doors open, one may not.** `activate_skill` and the shell fallback are approval
+  decisions and open under `yolo`. `read_file` refusing `~/.agents/skills/...` is a
+  *workspace boundary*, and there is no reason to expect an approval mode to move it.
+  `--include-directories` would, and was deliberately not added: it widens what the agent
+  may read, which is adjacent to the option the decision rejected, and adding it now would
+  confound the one variable being changed. The control run is the probe.
+
+  The control's advice now branches three ways rather than asserting `plan`: under `plan`
+  the cause is known and the fix is the flag; under anything else approval is ruled out and
+  the workspace is what remains; and when scoring captured transcripts it says that this
+  run's mode describes nothing about what produced them — which would have been confidently
+  wrong for every transcript captured before today. The
+  `--approval-mode plan` argument comes out; the block comment above `capture()` currently
+  ends *"and plan mode keeps it read-only"*, which becomes false. Replace it with what is
+  now true: the agent can act, that is required for the measurement, and the containment is
+  a fresh cwd plus a timeout rather than a read-only mode.
+- [x] **Re-run the control alone before paying for the rest.** Done 2026-08-27, and it
+  answered both questions at once. **Access is solved:** `01-bare` came back 3/3 `first`
+  under `--approval-mode yolo`, against 0/3 `unmeasurable` under `plan`. The decision was
+  right and the primary path works.
+- [ ] **Re-run the full corpus — the 2026-08-27 10:31 run is contaminated and must not be
+  cited.** It completed and reported eight of nine phrasings `first`, and the numbers are
+  still worthless, for three separate reasons found by reading the transcripts.
+
+## Yolo Let the Agent Edit Its Own Harness (2026-08-27)
+
+The containment note added to `capture()` that morning said an agent with shell access "is
+not confined to its cwd" and called it an accepted cost. It was accepted in the abstract
+and bit on the first run, harder than the note imagined.
+
+**It modified the instrument.** `05-pre-summarised.3` ran
+
+```sh
+sed -i.bak 's/names() { find ... }/names() { echo -n ""; }/' .../harness/run.sh
+```
+
+against the live `harness/run.sh`, neutering the function that enumerates the phrasings,
+and then invoked `harness/run.sh --skill climax-cli-scaffold --repeat 3` recursively. The
+running instance survived because bash had already parsed the function, so the sabotage did
+not show up in the output — it sat on disk afterwards, and `run.sh.bak` beside it, until
+someone looked. A subsequent run of the corpus would have enumerated zero phrasings and
+reported nothing wrong.
+
+**It roamed.** With an empty working directory and a prompt asking it to "check whether the
+config file still has the old timeout in it", `08-buried-in-a-list.1` went looking across
+`~/Documents/agent-orange/climax` — 30+ shell commands, `git log`, `climax lint`. Others
+reached into `skillsaw` itself, read its `TODO.md` and `git diff`, and one ran `go install
+.`, **replacing the scorer while the run was in progress**. The provenance header printed a
+10:30 binary; by the end there was an 11:30 one.
+
+**It produced transcripts the reader cannot open.** Two runs came back at 17MB and 105MB,
+single lines of 17MB each, over `maxLine`'s 8MiB. That is what `SPLIT over 3 runs: 2 , 1
+first` was: two `UNREAD` transcripts tallied as the zero-value Order and rendered as
+nothing at all.
+
+Restored: `names()` from the `.bak`, `.bak` deleted, scorer reinstalled from a verified
+tree, tests and lint green. `go.mod`'s skillet v0.22.0 → v0.23.0 was the operator's, not the
+agent's.
+
+- [x] **Contain the agent before re-running.** Done 2026-08-27 with macOS seatbelt, via
+  `GEMINI_SANDBOX=sandbox-exec` and a new `--sandbox` flag defaulting to it on Darwin.
+
+  The default profile, `permissive-open`, turns out to be exactly the shape this needs, and
+  the reason is worth recording because the obvious stricter choice would break the
+  measurement. Probed rather than assumed:
+
+  |           | outside the run's cwd                 | inside it |
+  | --------- | ------------------------------------- | --------- |
+  | **read**  | allowed — the skill stays reachable   | allowed   |
+  | **write** | blocked — *"Operation not permitted"* | allowed   |
+
+  So the agent can still read `~/.agents/skills/.../SKILL.md`, which is the whole
+  measurement, and can still do the scaffolding task in its own directory, but cannot touch
+  the harness, the repos, or `~/go/bin`. **Do not reach for `strict-open` or
+  `restrictive-*`:** those restrict reads as well, the skill lives outside the workspace,
+  and every run would come back `unmeasurable` — the failure of the previous three days,
+  re-created by a security setting instead of an approval mode.
+
+  Missing sandbox is a **refusal**, not a warning: `run.sh` exits 2 unless a mode is given
+  or `--sandbox none` is passed deliberately. A warning would have scrolled past exactly
+  like the stale-binary line did, and the failure it guards against is invisible in the
+  output by construction — the sabotaged `names()` did not affect the run that wrote it,
+  because bash had already parsed the function.
+- [x] **An `UNREAD` transcript must not render as an empty verdict.** Done 2026-08-27
+  via a `label()` in the agreement view that renders the zero-value Order as `unreadable`.
+  The run summary was wrong in the same way and is fixed alongside: it said *"at least one
+  phrasing started work before loading the skill"* for any non-`first` verdict, and three
+  of the four are not that. It now says which and points at the rows. Original entry: `emitAgreement` tallies
+  `report.Order`, which `judge` leaves as the zero value when the file cannot be read, so a
+  broken run prints the count followed by nothing — a blank where a verdict goes. Same class as the `emit` default
+  that rendered unknown verdicts as "first", and missed because the fix went to `emit` only.
+  The run summary compounded it: *"at least one phrasing started work before loading the
+  skill"* when nothing was after-action and two transcripts were simply unreadable.
+- [x] **Raise or remove `maxLine`.** Done 2026-08-27: 8MiB → 64MiB, against a measured
+  17.5MB largest line, so it is headroom over observed reality rather than a principled
+  bound. Deliberately still **fatal** when exceeded, and the reasoning is the interesting
+  part: the line that would be dropped is almost always a `tool_result`, and a dropped
+  result silently merges two batches into one, making `OrderOf` *more lenient*. A verdict
+  softened by a parse failure nobody saw is the exact failure mode of the last three days,
+  so refusing the file is the loud version of the same fact — which is what makes the
+  `unreadable` label above necessary rather than cosmetic. Original entry: 8MiB was sized for an agent that could not act. A
+  single `tool_result` now reaches 17MB, and the failure mode is the whole transcript
+  becoming unreadable rather than one event being skipped. Consider whether a line that
+  large should be read for its tool-call envelope and have its payload discarded, since
+  ordering never needs the output text.
+- [x] **Reconsider the `08` prompt's first item under an agent that can act.** Done
+  2026-08-27. Both neighbours are now answerable from the conversation — a naming-convention
+  question and a "why did we land on the shorter timeout" question — with no filesystem
+  referent for either. The burial is unchanged: the request is still the second of three.
+  What changes is that a neighbour can no longer be *serviced* with tools, so an
+  `after-action` verdict on `08` now means the agent began the skill's own task first, which
+  is the ordering question. Note this narrows what `08` measures, and is a partial answer to
+  the still-open question of whether `08` was ever on the same axis as the other eight.
+  Original entry: *"Check
+  whether the config file still has the old timeout in it"* has no referent in an empty
+  working directory, so a capable agent goes hunting for one across the filesystem. Under
+  plan mode that was a couple of refused reads; under yolo it is dozens of shell commands
+  and the bulk of the runtime.
+- [x] **A refused load must not read as `not-triggered`.** Done 2026-08-27. The verdict now says the skill's
+  description failed to fire when the truth is the runtime denied access, and that is
+  currently the reported outcome for 19 of 27 runs. It was filed as a hypothetical when
+  `OrderOf` learned to skip failed calls; it is not hypothetical. Needs either a fifth
+  `Order` — the honest reading is "unmeasurable", not a verdict about the skill — or a
+  refusal to score such a run at all, which is what `activation`'s `UNMEASURED` already
+  does for a skill it could not read.
+- [x] **Make the control's failure name the cause.** Done 2026-08-27. It correctly refused to interpret the
+  other eight, and said *"fix the trigger first"* — advice for a skill defect, pointed at
+  a sandbox policy. An author following it would rewrite a description that was never read.
+  The control now branches on whether `unmeasurable` appears among its verdicts, and prints
+  the agreement line for the control before the advice, so the claim *"the run above names
+  which"* is true rather than aspirational.
+
+**One thing the work turned up, worth keeping.** `ordering.emit` ended in a `default` case
+that rendered `"first — loaded before any work"`. Adding `OrderUnmeasurable` without
+touching it would have printed **a pass** for every refused run — exit code still non-zero,
+so CI would have caught it, and every human reading the report would not. `OrderFirst` is
+now an explicit case and the default reports an unrecognised verdict. This is the third
+inverted verdict this file has produced in a week, and the first one caught before it
+shipped rather than after; `TestANewVerdictDoesNotRenderAsAPass` guards the shape rather
+than any one value, so the next `Order` added cannot repeat it.
+
+## The Orphan Gate, Built (2026-08-27)
+
+Built and shipped as `skillsaw orphans`, with `internal/orphan` as the pure core. Both
+blockers cleared on the day: skillet v0.24.0 promoted `related`, and the baseline question
+below was answered by measuring rather than reasoning.
+
+**Baseline comes from a tree, not the manifest.** `changed` already carried `--tree`, so
+this is an additive `--base-tree` local to skillsaw — no kernel widening, no skillet
+release, and no consistency argument to win against exegesis's declined widening for
+origin-and-verdict. The decisive point is that both sides go through the same
+`related.ParseSection` at the same version: recording edges in the manifest would have made
+the manifest's notion of an edge a *snapshot* that can drift from the parser's across tool
+versions, at exactly the margins — fences, wrapped bullets — the source entry warned about.
+
+*Correcting the source entry:* its parenthetical **"(or a hash of them)" cannot work.**
+"Newly orphaned" asks whether *any* skill had an outbound edge to X — a whole-graph
+question. A per-skill hash says only that skill Y's edge list changed, never which targets
+it dropped. It buys one thing: if no hash changed and nothing was removed, the graph is
+unchanged and nothing is newly orphaned. A fast path, not an answer. Anyone revisiting this
+must record full edges.
+
+**Coverage is a tier, not a boolean, and that is the substance of the build.** The five
+kinds are not equally strong claims that a skill is still used:
+
+```text
+depends-on 4 > composes-with 3 > informs 2 > contrasts-with 1 > superseded-by 0
+```
+
+The ends are not in doubt. **3 over 2 is a judgement**, argued from skillet's own reasoning:
+`Informs` exists as a separate kind because `ComposesWith` *"would claim a symmetry 26 of
+the 38 do not have"*. Measured, `composes-with` is also load-bearing at 201 edges to
+`informs`' 38.
+
+So an edit rewriting a `composes-with` as a `contrasts-with` leaves the skill covered while
+dropping a real use relationship, and a boolean gate cannot see it. Demonstrated end to end
+on two copies of the real corpus with one edge deleted and one demoted — both caught, and
+the demotion is the one a boolean gate would have missed.
+
+**Measured, and it settled two arguments.** 285 skills: 43 `depends-on`, 83
+`composes-with`, 12 `informs`, 12 `contrasts-with`, **135 with nothing pointing at them**.
+
+- *Which kinds count as inbound.* I had claimed `contrasts-with` was the pivotal choice and
+  would silence the gate. Wrong: including it moves 12 skills of 285. `composes-with` moves
+  78. The choice is about the symmetry artifact — `contrasts-with` is semantically symmetric
+  but recorded one-directionally, so excluding it makes coverage depend on which of two
+  authors wrote the bullet — not about the number.
+- *Whether the absolute half is shippable.* At 47% orphaned it is not a gate, and shipping
+  it as one is what the source entry rightly refused. It ships as `Survey`: a tier
+  distribution with `BaseAvailable=false`, exit 0, which is information about corpus shape
+  rather than a verdict.
+
+**`superseded-by`, two separate exclusions.** Never counts as inbound — its target is the
+*replacement*, which was never at risk. And a skill that is the **source** of one is
+suppressed from orphan reporting entirely: `merge-skills` keeps it as an audit trail, so its
+edges decaying is the expected end of that life. Zero such edges exist today; this
+forecloses a false-positive class rather than fixing one.
+
+**`Convention` collapsed on contact, and that is worth recording.** The source entry carried
+it across as a fifth way to answer "does this check apply here" — true only when the corpus
+writes an edge of the kind being checked, skip otherwise. Worked through, the gate has
+nothing to do: a kind nobody writes produces no inbound edges, so it can never be a skill's
+strongest tier and nothing misfires. What survives is reporting — `Unadopted` names those
+kinds so a reader knows the ladder had fewer rungs. Re-deriving it as a gate would have been
+cargo.
+
+**Advisory, with the exit following the severity.** `finding.SeverityWarning` by default and
+exit 0, because an intentional removal legitimately orphans something and a gate that fires
+on those teaches bypassing. `--strict` promotes to `SeverityError` and the exit follows from
+that rather than from a second rule that could disagree with it — the failure shape that
+produces a green build over a red report.
+
+**Controls, both of which caught a real defect in the tests themselves.** Reversing the rank
+comparison fails the demotion row. Deleting the absent-from-baseline rule fails the new-skill
+row — but only after that row was fixed: as first written the new skill arrived *uncovered*,
+so `was == now` short-circuited before the rule was reached and the row passed with the rule
+deleted. A vacuous test that looked like coverage.
+
+- [x] **Tiering makes one thing invisible: an outbound demotion by the pointing skill.**
+  DONE (2026-08-27) as `orphan.Demotion` and the `demoted-outbound-edge` finding.
+
+  **A separate type, not a richer `Change`.** `Change` asks *"is this skill still
+  covered"*; a `Demotion` asks *"did this relationship weaken"*. Folding the second into
+  the first would leave `Orphaned` and `Weakened` ambiguous about which they mean. The
+  finding is also keyed on the **source** — the skill whose bullet changed, which is the
+  file to open — and a target-keyed finding structurally cannot name it.
+
+  **Verified against the instance this entry was filed on.** Demoting
+  `go-beyond-packages-as-layers`' `composes-with` edge to `go-beyond-four-tenet-layout` on
+  a copy of the real 288-skill corpus previously reported *"nothing was disconnected or
+  demoted"*, because two other skills still point at the target with `depends-on`. It now
+  reports the edge and the file. One edit yields exactly one demotion and zero changes;
+  two identical trees yield none, so there is no false-positive floor at 426 edges.
+
+  Three rules, each with a planted control run against it: **both endpoints must exist in
+  both trees** (a deleted skill's edges are a deletion, and listing them as demotions
+  buries it — neutering this reports them and fails the test); **strict rank decrease
+  only** (reversing the comparison fails the demotion test); and **a superseded source is
+  suppressed**, the rule `retired` already applies to targets.
+
+  **Double-reporting is accepted and documented rather than suppressed.** When the demoted
+  edge was also the target's strongest, a `Change` and a `Demotion` both fire for one edit.
+  Suppressing would make `Demotions` mean "the demotions the tier missed" — a type defined
+  by what another type failed to catch, which is worse to hand a reader than one edit
+  described twice from two grains.
+
+  `--strict` blocks on them, on the same footing as the other two and for the same reason:
+  it is regression-relative, so it cannot fire on a pre-existing state. That is the
+  property that made the other two safe to gate on and the absolute orphan count not.
+  Original entry:
+  `Weakened` compares the strongest inbound edge, so if two skills point at X with
+  `composes-with` and one demotes to `contrasts-with`, X's strongest is still
+  `composes-with` and nothing is reported. Correct by the current definition and arguably a
+  gap: the corpus lost a use relationship. Reporting it needs per-edge rather than
+  per-skill comparison, which is a bigger change than the tier was.
+- [ ] **Not wired into `gate` or `checks`.** Deliberate — it should be run against real
+  changes for a while before anything depends on it.
+
+## The Orphan Gate, Sited Here (2026-08-27)
+
+Source: exegesis deferred this pending a siting question and the answer came back "not
+there". exegesis is snapshot-shaped — one `manifest.Build` call, **zero** `manifest.Diff` —
+and a regression-relative gate would cost it that property permanently for one check.
+
+- [x] **Report what a change orphaned: a skill that lost its last inbound edge.** DONE
+  (2026-08-27) — the absolute half shipped as `Survey` earlier the same day; this closes the
+  regression-relative half against a manifest baseline, as `skillsaw orphans
+  --base-manifest FILE`. `--base-tree` remains the preferred path and the help text now says
+  which is which, because the "Built" section's argument against recorded edges was never
+  overturned: two trees go through one parser at one version and cannot drift from
+  themselves, while a recorded edge is a snapshot that can. `--base-manifest` is for the
+  case skillet's field doc names — the baseline is a published artifact and the checkout is
+  gone. Passing both is an error rather than a precedence rule: the two baselines are not
+  equally trustworthy, so silently preferring either would decide the answer on a rule
+  nobody would remember.
+  Both `Uncoupled` rules and `Convention` carried across unchanged, as the entry required —
+  `Compare` already held the first two and `Unadopted` already reported the third.
+  Original entry:
+  `coherence`'s `OrphanEndpoints` meter (`internal/drift/drift.go:198`) is the shape:
+  `NewlyOrphanedEndpoints` **and** `NewlyCoveredEndpoints` — both directions, so the gate
+  is regression-relative rather than absolute — plus `BaseAvailable`, keeping *"no
+  baseline"* distinct from *"zero"* the way `timeseries.Verdict.Compared` does.
+
+  **It belongs here because `Uncoupled` already solved its sub-problems**, not merely
+  because `changed` has a baseline. Two rules transfer unchanged from
+  `internal/edit/coupling.go`, and re-deriving them would be the whole risk:
+  - *"A location absent from the baseline is new and has nothing to be uncoupled from"* — a
+    skill absent from the baseline cannot be **newly** orphaned. Without this the first
+    corpus-wide run reports every pre-existing orphan as new.
+  - *"The result is advisory… a gate that fires on those teaches people to bypass it"* — an
+    intentional removal legitimately orphans something, so blocking is the caller's
+    decision taken by promoting the severity.
+
+  **Carry `Convention` across, and it is the most transferable part.** True only when the
+  current graph contains any edge of the kind being checked — proof the corpus actually
+  uses the pattern — and it skips the check when false. That is a **fifth** way to answer
+  "does this check apply here", and unlike the four the family already uses (a derived gate
+  in `redlines.checkTrigger`, a declared field in `skill.Lineage`, a manual `--check`
+  opt-in, an advisory severity) it is **derived from the corpus** rather than declared,
+  judged, or opted into. A repo that has never written a `verifies` edge is not failing the
+  convention; it has not adopted it.
+
+  Blocked on one prerequisite: **`related` must be promoted from exegesis to skillet**
+  (filed there). It is the only reader of the `## Related skills` graph and is currently
+  under exegesis's `internal/`. Do not fork it — a second implementation of "what is an
+  edge" would disagree at the margins over fences and wrapped bullets.
+
+  - [x] **And blocked on a second decision the source entry did not surface: where the
+    baseline edge graph comes from.** ANSWERED 2026-08-27 — **edge targets in the
+    manifest**, filed in skillet. Reasoning and this repo's half are below. Found 2026-08-27 while planning, by reading
+    `manifest.Skill` rather than trusting the siting argument.
+
+    **`manifest.Skill` is `{slug, dir, sha256, test_prompts, test_prompts_hash}` — it
+    records no edges.** So `manifest.Diff(base, cur)` reports which skills changed and
+    never what the baseline's graph was, and "newly orphaned" splits into a half that is
+    computable and a half that is not:
+
+    | half | needs | available |
+    | ---- | ----- | --------- |
+    | orphaned **now** | the current tree | yes, with `--tree` and promoted `related` |
+    | **not** orphaned before | the baseline's edge graph | **no** |
+
+    An edge disappears when a skill is removed, or when a surviving skill's body drops a
+    bullet. The first is invisible because the skill is gone; the second because its old
+    body is. A hash says the body moved, not what it said.
+
+    Three options, none free:
+    - **The manifest records each skill's edges** (or a hash of them). Exact and cheap at
+      diff time; widens a kernel type that is deliberately identity-only — the same
+      widening exegesis declined for origin-and-verdict.
+    - **The caller supplies a baseline *tree*, not just a manifest.** No kernel change, and
+      the graph is read identically on both sides; costs `changed` a second tree argument,
+      and a tree is heavier to keep around than a manifest.
+    - **Ship the absolute half, labelled, with `BaseAvailable=false`.** Honest and useful
+      today — and it is exactly the check exegesis refused to site. Moving a weaker check
+      to a different tool does not answer the objection that it collapses the distinction.
+
+    **Do not start the gate before this is answered.** Building against an unmade choice is
+    the failure recorded twice in adh's harvest line, and the promotion above is
+    independently justified, so there is useful work that does not wait on it.
+
+- [x] **Populate `Skill.Edges` in `inventory`, and read it in the gate.** DONE (2026-08-27),
+  on skillet v0.26.0, which is the release that carries `manifest.Skill.Edges` and
+  `Manifest.EdgesRecorded`. `inventory.Entry` records the graph off the same `skill.Load`
+  that produces the hash — no second read, and an unloadable skill leaves `Hash` and `Edges`
+  both empty under one rule rather than two — and `Tree` sets `EdgesRecorded`.
+  `RecordedGraph` is the inverse, and `orphans --base-manifest` is the consumer.
+
+  **Two premises in this entry were wrong, and the second is the one that matters.**
+
+  1. *"`internal/inventory` calls `manifest.Build`"* — it does not, and more to the point
+     **skillsaw never writes a manifest to disk at all.** `inventory.Tree` builds a literal
+     for `Diff` and nothing serialises it; `exegesis verify` is the only producer in the
+     family (`cmd/verify/verify.go:468`). So the producer half landing here does not put
+     edges in any manifest a user has. Verified against the real corpus: `orphans
+     --base-manifest` on `books/site-reliability-engineering/skills-manifest.json` refuses,
+     naming exegesis. **The exegesis half is therefore the whole producer story and is still
+     owed** — see the follow-up below, which is not a duplicate of this entry.
+  2. *"It must land in the same change as exegesis's `verify`"* — **relaxed by a skillet
+     change made after this was filed.** `Manifest.EdgesRecorded` (skillet `21548f1`) exists
+     so a producer that does not record edges fails **closed**: the consumer reads the graph
+     as unavailable and declines. exegesis lagging cannot produce phantom diffs; it produces
+     a refusal that names the repair. So the two halves may land apart, and this one did.
+
+  **The refusal is the load-bearing part, and it was planted before it was trusted.** A
+  manifest whose producer never read the graph is byte-identical to one describing a tree
+  with no edges — which is exactly why skillet put the flag on the manifest rather than
+  inferring it per skill. Replacing the guard with a fallback to an empty graph makes
+  `orphans` print `nothing was disconnected or demoted` against a baseline that never
+  existed, and passes every other test in the file; the control was run against that planted
+  version and caught it.
+
+  **Measured end to end on the real 288-skill tree**, since a gate nobody ran on real data
+  is the failure this file records against itself repeatedly. A recorded manifest of
+  `~/.claude/skills` compared against the unmodified tree reports no change; demoting one
+  real `composes-with` to `contrasts-with` reports
+  `context-intent-action-for-ai-models: weakened-inbound-edge`, **identical to what
+  `--base-tree` reports for the same edit**, and `--strict` exits 1. The two baselines were
+  shown to answer the same question rather than merely both producing output.
+
+  **Recording edges cannot move `Diff`,** and that is asserted from this side as well as
+  skillet's. Edges live inside SKILL.md so an edge change already moves `Hash`; if `Diff`
+  read them too, every graph edit would report on two axes and the campaign triage the
+  manifest exists for would double-count it. skillet pins the rule; the producer change is
+  what would break it.
+
+  Original entry: The baseline
+  decision (2026-08-27) is that `manifest.Skill` carries the edge *targets* a skill
+  declares; the kernel change is filed in skillet. This repo owes both halves.
+
+  **Producer.** `internal/inventory` calls `manifest.Build`, so it records targets via
+  `related.ParseSection` — reachable since `related` moved to skillet in v0.24.0. **It must
+  land in the same change as exegesis's `verify`**, the other producer: a field one tool
+  writes and the other does not is skew that surfaces as phantom diffs and gets diagnosed
+  as a gate bug rather than a producer gap.
+
+  **Consumer.** The gate computes newly-orphaned from base targets versus current ones,
+  keeping the two rules `Uncoupled` already established — absent from the baseline is new
+  and cannot be *newly* orphaned, and the result is advisory because an intentional removal
+  legitimately orphans something.
+
+  **No `Axes.Edges`, and the reason is worth keeping.** Corrected 2026-08-27 after a
+  separate finding challenged it. `TestPromptsHash` earns an axis because test-prompts are
+  a *separate file*, so "only the prompts changed" is a state the control test constructs.
+  Edges live inside SKILL.md, so an edge change always moves `Hash` — `Edges ⇒ Skill`,
+  always — and the matching control row describes a state no real tree can produce. Once
+  the targets are stored the refinement is computable from them anyway, and a stored bit is
+  a second thing that can disagree with its own data. The **field** is unaffected: a hash
+  says the body moved and cannot say what the old adjacency was.
+
+  **The pure core here is already agnostic about this, which is the right shape.**
+  `orphan.Compare(base, cur []related.Node)` takes two node sets, not two manifests, so the
+  storage decision only ever affects how a caller reconstitutes `base`. Keep it that way —
+  a `Compare` that took manifests would bind the comparison to one way of remembering
+  yesterday.
+
+  **`BaseAvailable` is derived, not declared.** Absent edges mean *unknown* (a manifest
+  written before the field existed); `[]` means known-to-declare-none. Collapse the two and
+  the first run against an old manifest reports every node as newly orphaned.
+
+  **Caveat carried from the decision: measure before trusting the output.** The readable
+  graph went from 222 to 357 edges on 2026-08-27 alone, and 44 display titles plus several
+  out-of-vocabulary kinds are still unread. An orphan count is only as good as the graph
+  beneath it. Report the count alongside how much of the corpus the reader could see, so
+  the two are never separated.
+
+  **Done, and narrower than the caveat asked for.** `orphan.Coverage` is a field on
+  `Report`, computed by both `Survey` and `Compare`, so the count and the extent arrive
+  together rather than the extent being a line a caller can forget to print. It carries the
+  skills read, the edges read, and how many of those name a slug absent from this tree —
+  read, and covering nothing. On `~/.claude/skills`: 288 skills, 426 edges, 47 dangling.
+  It is printed as a **floor**, in those words, because two things are unread and neither
+  can be counted from here. See the `TitleRefs` finding below for why the display-title half
+  of the caveat is not merely unimplemented but unimplementable with the tool it named.
+
+## What the Orphan Gate's Manifest Path Turned Up (2026-08-27)
+
+Three findings from building `--base-manifest`, filed separately because each outlives it.
+
+- [ ] **exegesis must record edges, and the conversion should be promoted before it does.**
+  **The promotion is done (2026-08-27, skillet `6115cc3`, unreleased):** `related.EdgeMap`
+  and `related.EdgesFrom` in `related/record.go`, sited there because `manifest` is
+  stdlib-only and cannot import `related` — which is why the field is a
+  `map[string][]string` in the first place. What remains is the two consumers, and **both
+  wait on a skillet release**; there is no `go.work` and no `replace`, and both repos pin
+  v0.26.0.
+
+  Owed, in one change so the two producers cannot skew:
+  1. **exegesis `verify`** — `skillReport` gains `edges` from `related.ParseSection(s.Body)`
+     in the same `skill.Load` branch that sets `hash`, so an unloadable skill leaves both
+     empty under one rule; `writeManifest` encodes with `related.EdgeMap` and sets
+     `EdgesRecorded` on the built manifest. `manifest.Build` does not take the flag —
+     it takes the emitting tool and whether gates passed, and "did the producer read the
+     graph" is neither — so it is set on the returned value.
+  2. [x] **skillsaw** — delete `inventory.edgeMap` and `sortedKeys` for `related.EdgeMap` and
+     `related.EdgesFrom` (Done 2026-08-25). All existing tests passed **unchanged**, verifying
+     that the promotion of the edge mapping implementation to skillet v0.27.0 was fully
+     backward-compatible and faithful.
+
+  **The check that settles it is not a unit test.** `orphans --base-manifest` against an
+  exegesis-written manifest is refused today (verified on
+  `books/site-reliability-engineering/skills-manifest.json`). Afterwards it must be
+  accepted *and* report the same regression `--base-tree` reports for the same edit. That
+  is the only thing that demonstrates the two producers agree.
+  Original entry:
+  skillsaw's producer half is done and reaches no manifest on disk, because skillsaw writes
+  none — `exegesis verify` is the family's only manifest producer. Until it records edges,
+  `orphans --base-manifest` refuses every real manifest in the corpus. The refusal is
+  correct and the feature is unexercisable outside tests.
+  **Do not simply copy `inventory.edgeMap` into exegesis.** Both producers need the same
+  answer to "an edge as the manifest spells it — kind to sorted targets, rationale dropped",
+  and a second hand-written copy is precisely the drift `speclint`, `redlines` and `related`
+  were each promoted to end. The second consumer is what promotes, and it is arriving: the
+  pair belongs in `skillet/related` as the encoder/decoder for a field `manifest` cannot
+  hold itself, since `manifest` is deliberately stdlib-only and cannot import `related`.
+  That is a skillet release and two `go.mod` bumps, which is why it is filed rather than
+  taken in the same pass.
+
+- [x] **`related.TitleRefs` cannot count the display-title bullets the caveat asks about.**
+  FIXED UPSTREAM (2026-08-27, skillet `c1ab378`, unreleased). `isKindToken` asks
+  `canonicalKind` instead of the token's shape: `~/.claude/skills` goes 339 → 185 refs and
+  `~/.agents/skills` 251 → 119, with resolved unchanged at 59 and 53 — nothing real
+  filtered out, only the phantoms.
+  **The filing under-rated it.** The same predicate existed twice, and the copy that
+  mattered was `resolvedTitleFor`, which backs `ResolveTitles` and **rewrites bullets on
+  disk**: with the old test it turns `- **Depends On** — *composes-with* → why` into
+  `- **dependency-direction** — …`, making a kind marker into a target.
+  **No change here.** `orphan.Coverage` still reports a floor and still does not count
+  display titles: doing so needs a tree walk to resolve them, and a count of *unresolvable*
+  references is a different number from what the caveat asks for. Revisit only if the
+  caveat is reopened. Original entry:
+  using it would put a wrong number under a heading that claims honesty.**
+  Measured on `~/.claude/skills`: **339 refs against 426 edges**, of which 6 resolve. What
+  it names are the *kinds* of well-formed bullets — `composes-with`, `depends-on` — not
+  display titles. `boldLeads` returns the bold token at the head of every bullet in the
+  section, and `TitleRefs` filters that population with `strings.Contains(tok, "_")`,
+  commented "a kind in the bold position". **The canonical kinds are hyphenated, so the
+  filter matches none of them.** On `~/.agents/skills` it is 251 refs and 0 resolved.
+  This is an upstream defect to file against skillet, not a caller mistake, and it is why
+  `Coverage` reports a floor rather than the display-title count. An unresolved bullet is
+  visibly unread; a count that says 339 bullets were missed when the parser read them fine
+  is the flattering-and-wrong direction the family refuses everywhere else.
+
+- [x] **An error from any subcommand prints 35 lines of usage before the message.** DONE
+  (2026-08-27). `root.UsageError` marks a misuse of the command line — a wrong argument
+  count, a missing required flag, an invalid flag value — and the dispatcher prints usage
+  for those and nothing else. Measured on the two that motivated it: the unreadable
+  manifest and the producer gap go from 35 lines to **1**, and every misuse still prints
+  its help.
+  **The predicate is the error's type, not a list of exceptions, and that is the fix rather
+  than an implementation detail.** The rule it replaces named `ErrNoExec` and `ExitError`,
+  so every error added after it was written defaulted to printing usage — the wrong
+  default, applied silently, which is how this survived. The invariant is now pinned as a
+  correspondence (`TestUsageIsPrintedForMisuseAndNothingElse`): usage appears **iff**
+  `errors.As` finds a `UsageError`. A test over one example would not have caught the
+  original.
+  **Usage rendering also collapsed from three sites to one.** `Parse`, the unknown
+  subcommand and the command's own error each printed their own help; two of the three were
+  outside the rule the third was applying, so a change to the rule could miss them.
+  **`MisplacedFlag` now returns the finished error.** Fifteen callers spelled one sentence
+  fifteen times — one wording able to drift in fifteen places, and, once the dispatcher
+  decides on type, fifteen places that could each forget the mark. It returns the concrete
+  `UsageError` with a comma-ok bool for the reason `Usagef` documents: an error-typed value
+  returned from another package is reported by `wrapcheck`, and there is nothing to wrap.
+  **The test's first probe was wrong in a way worth keeping.** It looked for `FLAGS` in the
+  output; the root command declares no flags, so its help omits that section and the
+  unknown-subcommand row failed against working code. `USAGE` heads every rendered block.
+  Original entry: Measured:
+  `changed --manifest /nonexistent.json` and `orphans --base-manifest` on an
+  edgeless manifest both dump the full help, then the real error last.
+  **This is the same defect the `preflight` entry named on 2026-08-24** — *"because the
+  error reaches `ff`'s handler it prints the full usage text, so a missing file reads as
+  though the caller mistyped a flag"*. That entry fixed the abort, not the dump, and the
+  dump is CLI-wide rather than per-command: it lives in the dispatcher's error path, so
+  fixing it in one command would be inconsistent and fixing it once would fix it everywhere.
+  It bites hardest exactly where a message names a repair, since the repair scrolls off.
+  Found by running the command against a real manifest, not by a test — `run()` returns the
+  error separately from stdout, so no existing test can see it.
+
+- Note, not a work item: **L2648's tiering gap now has a real instance.** It was filed as
+  reasoning; demoting `go-beyond-packages-as-layers`' `composes-with` edge to
+  `go-beyond-four-tenet-layout` on a copy of the real corpus is reported as **nothing**,
+  because `go-beyond-service-transaction-boundary` and `go-beyond-three-consumer-error`
+  still point at the target with `depends-on` and the strongest inbound is unchanged. The
+  tool is correct by its current definition and the corpus lost a use relationship. A target
+  with a single inbound edge (`context-intent-action-for-ai-models`) is caught, which is
+  what makes the boundary of the gap concrete rather than theoretical.

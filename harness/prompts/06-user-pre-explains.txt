@@ -1,0 +1,10 @@
+# the user explains the skill, so loading it looks redundant
+{{TASK}}
+
+I want to use {{SKILL}} for this. That means:
+
+- Work through it in order rather than jumping around
+- Check in between steps
+- Keep the iteration tight
+
+Let's start — go ahead and begin.

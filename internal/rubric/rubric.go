@@ -16,6 +16,27 @@
 // detectors are skillet/skilllens (FailureMechanisms, SofteningPhrases,
 // BlacklistSections), which adh also scores, so the two tools cannot drift; the weights
 // and 1-10 mapping stay skillsaw's.
+//
+// # What dims 3, 5 and 9 are valid for
+//
+// Those three reward an encoded failure branch, concrete rather than hedged steps, and an
+// explicit boundary section. Those are the right signals for a skill whose baseline
+// failure is a model doing the wrong thing under pressure -- a discipline skill, where the
+// text has to hold a line the model would otherwise cross.
+//
+// They are not the right signals for every skill, and the form that fixes one failure type
+// can measurably worsen another: in a controlled comparison of guidance forms, a
+// prohibition-shaped arm produced clearly more of the unwanted content than a
+// recipe-shaped arm, with fully separated distributions, and trended worse than giving no
+// guidance at all. A skill whose baseline failure is wrong-shaped output or an omitted
+// field wants a recipe, and scoring it against a boundary section rewards the wrong shape.
+//
+// The consequence for a reader of these scores: a low 3, 5 or 9 on a reference skill is a
+// statement about form, not about quality, and three empty detector results are not three
+// passes. The scores here are reported per dimension and never collapsed into one number
+// precisely so that this distinction survives to whoever acts on them. The dimensions are
+// not conditioned on skill class because skillsaw has no trustworthy way to infer the
+// class, and guessing it would silently change what a score means.
 package rubric
 
 import (
@@ -34,15 +55,60 @@ import (
 	"github.com/StevenACoffman/skillet/testprompts"
 )
 
+// How a dimension's deterministic score responds to feeding it more of what it counts.
+const (
+	// ResponseUnclassified is the zero value and means nobody has established the
+	// direction. It is not "neutral": an unmeasured dimension must not read as one
+	// that was measured and found inert, which is the same rule finding.Action's
+	// absent zero follows. Dimensions() must classify every dimension, and a test
+	// enforces it.
+	ResponseUnclassified Response = ""
+	// ResponseNeutral means adding does not move the deterministic score.
+	ResponseNeutral Response = "neutral"
+	// ResponseAdditive means adding raises it -- an optimiser target.
+	ResponseAdditive Response = "additive"
+	// ResponseSubtractive means adding LOWERS it, so the cheap move is to remove.
+	// Dim 4 is the live instance and it is the surprising one: an unscored
+	// needs-judge dimension is optimistically assumed to be a perfect 10, so
+	// deriving any real base can only match or reduce it.
+	ResponseSubtractive Response = "subtractive"
+)
+
+// Response is the direction a dimension's deterministic score moves when the artifact
+// gains more of what that dimension counts.
+type Response string
+
 // Dimension is one rubric axis.
 type Dimension struct {
-	Num    int
-	Key    string
-	Name   string
-	Weight int
+	Num    int    `toml:"num"`
+	Key    string `toml:"key"`
+	Name   string `toml:"name"`
+	Weight int    `toml:"weight"`
 	// NeedsJudge is true when the dimension's base 1-10 quality cannot be
 	// determined without a model (spec §8.1). Deterministic penalties still apply.
-	NeedsJudge bool
+	NeedsJudge bool `toml:"needs_judge"`
+	// Response says which way this dimension's deterministic score moves when the
+	// artifact gains something the dimension counts. Measured, not assumed -- see
+	// TestDimensionResponseMatchesBehaviour, which feeds each dimension the thing it
+	// counts and asserts the direction.
+	//
+	// It records a mechanism, not a verdict. Every dimension here is defensible and
+	// none is being called wrong; dims 4 and 9 were tuned against the 233-skill corpus
+	// and the comments on their checks say why. What this captures is that an
+	// optimiser pointed at the total has a cheap move available, and which way it
+	// runs -- a fact a person editing one of these thresholds needs and cannot get
+	// from the weight.
+	//
+	// The concrete instance it exists for: a surveyed self-optimising loop raised a
+	// harness score by 37% with no capability change, by adding files a
+	// presence-counting metric rewarded, and logged the artefacts as "legitimate".
+	Response Response `toml:"response"`
+
+	// Note records why this dimension has the weight it has. The loader refuses a
+	// dimension without one: a weight with no warrant is a magic number that has
+	// merely changed file, and recording the warrant is the reason the rubric is a
+	// document at all.
+	Note string `toml:"note"`
 }
 
 // DimScore is the per-dimension result.
@@ -60,8 +126,17 @@ type DimScore struct {
 
 // Evaluation is the full deterministic evaluation of one skill.
 type Evaluation struct {
-	Skill              string     `json:"skill"`
-	Hash               string     `json:"hash"`
+	Skill string `json:"skill"`
+	Hash  string `json:"hash"`
+
+	// Rubric is the edition that produced these scores.
+	//
+	// Two evaluations of the same skill under different rules are not a before and an
+	// after: dim 4 scoring 9 then 7 says nothing if the checkpoint band moved in between.
+	// Recorded here so a comparison can refuse, the way eval already refuses a judge base
+	// from another edition. Empty means unknown, which is not the same as matching.
+	Rubric string `json:"rubric"`
+
 	Bytes              int        `json:"bytes"`
 	Dims               []DimScore `json:"dims"`
 	RuntimeWarn        int        `json:"runtime_warn"`
@@ -80,45 +155,45 @@ type Config struct {
 	FillerTails       []string // dim1: banned trailing filler
 	Slop              []string // dim7: AI-slop words (each -> -1)
 	CheckpointMarkers []string // dim4: explicit visual markers
+
+	// Thresholds are the scoring bands, carried alongside the lists so a check has one
+	// place to read its policy from.
+	Thresholds Thresholds
 }
 
-// DefaultConfig returns the banned/marker/heading lists. It covers both the
-// Chinese darwin-source vocabulary and English equivalents, because the checks
-// must fire on English skills too (a China-only list scores every English skill
-// as defect-free, which is the opposite of useful).
+// Valid reports whether r is a classified direction. The zero value is not one: it
+// means nobody established the direction, which is a different claim from "neutral".
+func (r Response) Valid() bool {
+	switch r {
+	case ResponseNeutral, ResponseAdditive, ResponseSubtractive:
+		return true
+	default:
+		return false
+	}
+}
+
+// DefaultConfig returns the word lists the deterministic checks match against.
+//
+// They come from the embedded rubric document, which covers both the Chinese darwin-source
+// vocabulary and English equivalents -- a China-only list scores every English skill as
+// defect-free, which is the opposite of useful.
 func DefaultConfig() *Config {
+	r := mustLoadEmbedded()
 	return &Config{
-		FillerTails: []string{
-			"灵活应用", "根据情况判断", "视情况而定", "灵活把握",
-			"as appropriate", "use your judgment", "as needed",
-			"depending on context", "your mileage may vary",
-		},
-		Slop: []string{
-			"说白了", "换句话说", "综上", "首先", "其次",
-			"in other words", "that said", "at the end of the day",
-			"needless to say", "it's worth noting", "simply put", "in essence",
-		},
-		CheckpointMarkers: []string{
-			"🔴", "🛑", "⚠️", "🚨", "🚦", "STOP", "CHECKPOINT", "HALT",
-		},
+		FillerTails:       r.Lists.FillerTails,
+		Slop:              r.Lists.Slop,
+		CheckpointMarkers: r.Lists.CheckpointMarkers,
+		Thresholds:        r.Thresholds,
 	}
 }
 
-// Dimensions returns the authoritative rubric. Weights use the reconciled table
-// from spec D1 (dim6 = 5) so the nine weights sum to exactly 100. Dims 3, 5, and 9
-// are the SkillLens dimensions (see the package doc); the rest are darwin's spec §8.
+// Dimensions returns the authoritative rubric, read from the embedded document.
+//
+// The weights sum to exactly 100 and each carries a note recording why it has the value it
+// has; the loader refuses a document where either fails. What used to be a Go literal with
+// its warrant in a comment is now a reviewable diff with its warrant beside it.
 func Dimensions() []Dimension {
-	return []Dimension{
-		{1, "frontmatter", "Frontmatter quality", 7, true},
-		{2, "workflow", "Workflow clarity", 12, true},
-		{3, "failure", "Failure-mode encoding", 12, true},
-		{4, "checkpoint", "Checkpoint design", 6, false},
-		{5, "specificity", "Actionable specificity", 17, true},
-		{6, "resources", "Resource integration", 5, false},
-		{7, "architecture", "Overall architecture", 12, true},
-		{8, "effectiveness", "Real-world test performance", 23, true},
-		{9, "blacklist", "Counter-examples / blacklist", 6, false},
-	}
+	return mustLoadEmbedded().Dimension
 }
 
 // Evaluate scores a skill deterministically (no judge bases). It is the common
@@ -131,7 +206,9 @@ func Evaluate(s *skill.Skill, cfg *Config) *Evaluation {
 // score for every needs-judge dimension, also computes the full rubric total.
 // It reads a sibling README.md (if present) for the runtime-neutrality scan.
 func EvaluateWithBases(s *skill.Skill, cfg *Config, bases map[int]int) *Evaluation {
-	ev := &Evaluation{Skill: s.Name, Hash: identity.Hash(s.Raw), Bytes: s.Bytes}
+	ev := &Evaluation{
+		Skill: s.Name, Hash: identity.Hash(s.Raw), Bytes: s.Bytes, Rubric: Edition(),
+	}
 	if ev.Skill == "" {
 		ev.Skill = filepath.Base(s.Dir)
 	}
@@ -212,7 +289,7 @@ func applyChecks(num int, s *skill.Skill, doc *markdown.Doc, cfg *Config, ds *Di
 	case 8:
 		checkScorable(s, ds)
 	case 9:
-		deriveBlacklist(doc, ds)
+		deriveBlacklist(doc, &cfg.Thresholds, ds)
 	}
 }
 
@@ -250,12 +327,9 @@ func checkFrontmatter(s *skill.Skill, cfg *Config, ds *DimScore) {
 		ds.Flags = append(ds.Flags, fmt.Sprintf(
 			"description over %d chars", speclint.DescriptionMaxRunes))
 	}
-	for _, tail := range cfg.FillerTails {
-		if strings.HasSuffix(strings.TrimRight(desc, "。.\" '"), tail) {
-			ds.Penalty++
-			ds.Flags = append(ds.Flags, "filler tail: "+tail)
-			break
-		}
+	if tail, ok := cfg.HasFillerTail(desc); ok {
+		ds.Penalty++
+		ds.Flags = append(ds.Flags, "filler tail: "+tail)
 	}
 }
 
@@ -348,15 +422,15 @@ func checkScorable(s *skill.Skill, ds *DimScore) {
 
 func deriveCheckpoint(doc *markdown.Doc, cfg *Config, ds *DimScore) {
 	n := 0
-	for _, m := range cfg.CheckpointMarkers {
-		n += strings.Count(doc.Prose, m)
+	for _, h := range cfg.MarkerHits(doc.Prose) {
+		n += h.Count
 	}
 	// Only substantial marker usage (>=3) is positive evidence of checkpoint
 	// discipline (base 9). Zero-to-two markers is neither strong evidence nor a
 	// defect — a lone ⚠️ warning must not score WORSE than no markers at all — so
 	// dim 4 defers to a judge. (Absence is legitimate for knowledge/decision
 	// skills; pinning it low made "add checkpoints" a useless universal diagnosis.)
-	if n < 3 {
+	if n < cfg.Thresholds.CheckpointMinMarkers {
 		ds.NeedsJudge = true
 		msg := "no explicit checkpoint markers; this skill runs commands, so judge whether " +
 			"it needs them"
@@ -376,7 +450,7 @@ func deriveCheckpoint(doc *markdown.Doc, cfg *Config, ds *DimScore) {
 		ds.Flags = append(ds.Flags, msg)
 		return
 	}
-	ds.Base = 9
+	ds.Base = cfg.Thresholds.CheckpointBase
 	ds.HasBase = true
 	ds.Flags = append(ds.Flags, strconv.Itoa(n)+" explicit checkpoint marker(s)")
 }
@@ -495,17 +569,14 @@ func isSubdir(dir, seg string) bool {
 
 func checkSlop(doc *markdown.Doc, cfg *Config, ds *DimScore) {
 	n := 0
-	for _, w := range cfg.Slop {
-		c := strings.Count(doc.Prose, w)
-		if c > 0 {
-			n += c
-			ds.Flags = append(ds.Flags, "AI-slop: "+w+" ×"+strconv.Itoa(c))
-		}
+	for _, h := range cfg.SlopHits(doc.Prose) {
+		n += h.Count
+		ds.Flags = append(ds.Flags, "AI-slop: "+h.Term+" ×"+strconv.Itoa(h.Count))
 	}
 	ds.Penalty += n // §8.2: each occurrence -1
 }
 
-func deriveBlacklist(doc *markdown.Doc, ds *DimScore) {
+func deriveBlacklist(doc *markdown.Doc, th *Thresholds, ds *DimScore) {
 	units := -1 // -1 => no recognized section at all
 	// Score the richest matching section, not the first: a thin early "Caution"
 	// note must not hide a later 10-row "Common Mistakes" table. skilllens locates the
@@ -517,13 +588,13 @@ func deriveBlacklist(doc *markdown.Doc, ds *DimScore) {
 	}
 	switch {
 	case units <= 0:
-		ds.Base = 2
+		ds.Base = th.BlacklistEmptyBase
 		ds.Flags = append(ds.Flags, "no counter-example / boundary section")
-	case units < 3:
-		ds.Base = 6
+	case units < th.BlacklistFullUnits:
+		ds.Base = th.BlacklistThinBase
 		ds.Flags = append(ds.Flags, "thin counter-example section ("+strconv.Itoa(units)+" points)")
 	default:
-		ds.Base = 9
+		ds.Base = th.BlacklistFullBase
 		ds.Flags = append(ds.Flags, "counter-example section ("+strconv.Itoa(units)+" points)")
 	}
 	ds.HasBase = true

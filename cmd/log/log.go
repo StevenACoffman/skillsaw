@@ -17,6 +17,7 @@ import (
 
 	"github.com/StevenACoffman/skillsaw/cmd/root"
 	"github.com/StevenACoffman/skillsaw/internal/auditlog"
+	"github.com/StevenACoffman/skillsaw/internal/rubric"
 )
 
 // defaultFile is the log every other command in this family reads and writes.
@@ -55,13 +56,15 @@ func New(parent *root.Config) *Config {
 		"the commit this row describes; a baseline row records \"baseline\"")
 	cfg.Flags.StringVar(&cfg.Row.Timestamp, 0, "timestamp", "",
 		"override the recorded time (default: now)")
+	cfg.Flags.StringVar(&cfg.Row.Rubric, 0, "rubric", "",
+		"the rubric edition this score was produced under (default: the current one)")
 	cfg.Command = &ff.Command{
 		Name:      "log",
 		Usage:     "skillsaw log --skill NAME --status STATUS [flags]",
 		ShortHelp: "append one row to the optimization log",
 		LongHelp: `Append a row to results.tsv, the log "skillsaw history" renders.
 
-The nine columns and their order are skillet's, and so is the check that the status is
+The ten columns and their order are this package's, and so is the check that the status is
 one the log admits. Writing the row by hand -- which is what an optimize loop did before
 this command existed -- spells that order out a second time, in a printf, where it can
 drift from the reader's without anything noticing.
@@ -73,7 +76,12 @@ The timestamp defaults to now, because a caller should not have to format one
 consistently. The commit does not default to anything derived: resolving it would mean
 running git from inside skillsaw, and a baseline row deliberately records the word
 "baseline" in that column rather than a sha, so there is no single right answer. Pass
-what the row means.`,
+what the row means.
+
+The rubric edition defaults to the current one, so a row records which rules produced
+its score without the caller thinking about it. That is what lets "skillsaw regression"
+refuse to average across a rubric change: an edit that raised every score is otherwise
+indistinguishable, in this file, from skills that got better.`,
 		Flags: cfg.Flags,
 		Exec:  cfg.exec,
 	}
@@ -82,20 +90,23 @@ what the row means.`,
 }
 
 func (cfg *Config) exec(_ context.Context, args []string) error {
-	if bad := root.MisplacedFlag(args); bad != "" {
-		return fmt.Errorf(
-			"log: %q looks like a flag after arguments; put flags before positional arguments",
-			bad,
-		)
+	if err, bad := root.MisplacedFlag("log", args); bad {
+		return err
 	}
 	if len(args) > 0 {
-		return errors.New("log: takes no positional arguments; every field is a flag")
+		return root.Usagef("log: takes no positional arguments; every field is a flag")
 	}
 	if strings.TrimSpace(cfg.Row.Skill) == "" {
-		return errors.New("log: --skill is required")
+		return root.Usagef("log: --skill is required")
 	}
 	if cfg.Row.Timestamp == "" {
 		cfg.Row.Timestamp = time.Now().Format(timeFormat)
+	}
+	if cfg.Row.Rubric == "" {
+		// Defaulted rather than required: a caller that had to supply it would eventually
+		// supply a stale one, and the current edition is the honest answer for a score
+		// this binary just produced.
+		cfg.Row.Rubric = rubric.Edition()
 	}
 	// The status is validated by auditlog.Append, which rejects an unknown one before
 	// writing anything. Re-checking here would put the same rule in two places, and the

@@ -29,8 +29,8 @@ func TestParseTheLegacyShape(t *testing.T) {
 func TestParseTheHashBoundShape(t *testing.T) {
 	t.Parallel()
 	f, err := scores.Parse([]byte(`{"entries":[
-		{"skill":"alpha","hash":"aaa1","bases":{"1":8}},
-		{"skill":"beta","hash":"bbb2","bases":{"2":6}}]}`))
+		{"skill":"alpha","hash":"aaa1","bases":{"1":8},"rubric":"ed1"},
+		{"skill":"beta","hash":"bbb2","bases":{"2":6},"rubric":"ed1"}]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,10 +57,11 @@ func TestParseRejectsWhatCannotBeScoredHonestly(t *testing.T) {
 		"base below the floor":          {`{"1": 0}`, "out of range"},
 		"malformed json":                {`{"1":`, "parse scores"},
 		"entry with no hash": {
-			`{"entries":[{"skill":"alpha","bases":{"1":8}}]}`, "no hash",
+			`{"entries":[{"skill":"alpha","bases":{"1":8},"rubric":"ed1"}]}`, "no hash",
 		},
 		"entry base out of range": {
-			`{"entries":[{"skill":"a","hash":"h","bases":{"1":99}}]}`, "out of range",
+			`{"entries":[{"skill":"a","hash":"h","bases":{"1":99},"rubric":"ed1"}]}`,
+			"out of range",
 		},
 	}
 	for name, tc := range cases {
@@ -80,11 +81,11 @@ func TestParseRejectsWhatCannotBeScoredHonestly(t *testing.T) {
 func TestBasesAppliesOnlyToTheVersionJudged(t *testing.T) {
 	t.Parallel()
 	f, err := scores.Parse([]byte(
-		`{"entries":[{"skill":"alpha","hash":"aaa1","bases":{"1":8}}]}`))
+		`{"entries":[{"skill":"alpha","hash":"aaa1","bases":{"1":8},"rubric":"ed1"}]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	bases, stale := f.Bases("alpha", "aaa1")
+	bases, stale := f.Bases("alpha", "aaa1", "ed1")
 	if stale || bases[1] != 8 {
 		t.Errorf("the judged version was not matched: bases=%v stale=%t", bases, stale)
 	}
@@ -96,13 +97,13 @@ func TestBasesTellsNeverJudgedApartFromJudgedAtAnotherVersion(t *testing.T) {
 	// "judge it" and the other means "re-judge it"; a caller that could not tell them
 	// apart would see an unexplained missing score in both.
 	f, err := scores.Parse([]byte(
-		`{"entries":[{"skill":"alpha","hash":"aaa1","bases":{"1":8}}]}`))
+		`{"entries":[{"skill":"alpha","hash":"aaa1","bases":{"1":8},"rubric":"ed1"}]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Run("edited since it was judged", func(t *testing.T) {
 		t.Parallel()
-		bases, stale := f.Bases("alpha", "different")
+		bases, stale := f.Bases("alpha", "different", "ed1")
 		if !stale {
 			t.Error("an edited skill reused bases judged against the old text")
 		}
@@ -115,7 +116,7 @@ func TestBasesTellsNeverJudgedApartFromJudgedAtAnotherVersion(t *testing.T) {
 	})
 	t.Run("never judged at all", func(t *testing.T) {
 		t.Parallel()
-		bases, stale := f.Bases("gamma", "ccc3")
+		bases, stale := f.Bases("gamma", "ccc3", "ed1")
 		if stale {
 			t.Error("a skill absent from the file was reported as stale")
 		}
@@ -133,7 +134,7 @@ func TestBasesFromALegacyFileApplyToWhateverTheyAreGiven(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bases, stale := f.Bases("anything", "any-hash")
+	bases, stale := f.Bases("anything", "any-hash", "ed1")
 	if stale {
 		t.Error("a file with no hash cannot be stale")
 	}
@@ -146,14 +147,14 @@ func TestAnEntryWithNoSkillNameIsStillMatchedByHash(t *testing.T) {
 	t.Parallel()
 	// The hash is the key; the name is a label for reports. An unnamed entry must
 	// still bind to its version, and must never be reported stale for another skill.
-	f, err := scores.Parse([]byte(`{"entries":[{"hash":"aaa1","bases":{"1":8}}]}`))
+	f, err := scores.Parse([]byte(`{"entries":[{"hash":"aaa1","bases":{"1":8},"rubric":"ed1"}]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if bases, stale := f.Bases("", "aaa1"); stale || bases[1] != 8 {
+	if bases, stale := f.Bases("", "aaa1", "ed1"); stale || bases[1] != 8 {
 		t.Errorf("unnamed entry not matched: bases=%v stale=%t", bases, stale)
 	}
-	if _, stale := f.Bases("", "other"); stale {
+	if _, stale := f.Bases("", "other", "ed1"); stale {
 		t.Error("an unnamed entry was claimed as another skill's stale judgment")
 	}
 }
@@ -167,7 +168,7 @@ func TestParseEmptyEntries(t *testing.T) {
 	if len(f.Entries) != 0 || len(f.Unbound) != 0 {
 		t.Errorf("want an empty document, got %+v", f)
 	}
-	if bases, stale := f.Bases("alpha", "aaa1"); stale || bases != nil {
+	if bases, stale := f.Bases("alpha", "aaa1", "ed1"); stale || bases != nil {
 		t.Errorf("empty file gave bases=%v stale=%t", bases, stale)
 	}
 }
@@ -233,8 +234,8 @@ func TestMarshalRoundTripsThroughParse(t *testing.T) {
 	t.Parallel()
 	// The property that keeps the writer and the reader one definition.
 	want := []scores.Entry{
-		{Skill: "alpha", Hash: "aaa1", Bases: map[int]int{1: 8, 2: 7}},
-		{Skill: "beta", Hash: "bbb2", Bases: map[int]int{5: 10}},
+		{Skill: "alpha", Hash: "aaa1", Bases: map[int]int{1: 8, 2: 7}, Rubric: "ed1"},
+		{Skill: "beta", Hash: "bbb2", Bases: map[int]int{5: 10}, Rubric: "ed1"},
 	}
 	b, err := scores.Marshal(want)
 	if err != nil {
@@ -258,7 +259,7 @@ func TestMarshalRoundTripsThroughParse(t *testing.T) {
 		}
 	}
 	// And the written entry is usable: it matches by hash.
-	if bases, stale := got.Bases("alpha", "aaa1"); stale || bases[1] != 8 {
+	if bases, stale := got.Bases("alpha", "aaa1", "ed1"); stale || bases[1] != 8 {
 		t.Errorf("the written entry does not match its own hash: %v %t", bases, stale)
 	}
 }
@@ -280,5 +281,168 @@ func TestMarshalRefusesWhatParseWouldReject(t *testing.T) {
 				t.Errorf("wrote a document Parse would reject:\n%s", b)
 			}
 		})
+	}
+}
+
+// TestAggregatedReportsWhatTheSampleSupports covers the reason Base is paired with a range.
+// Three cases agreeing exactly still leave most of the scale open, and a Base read on its
+// own looks like a measurement; forty cases agreeing pin it, and must be allowed to.
+func TestAggregatedReportsWhatTheSampleSupports(t *testing.T) {
+	t.Parallel()
+	three := make([]float64, 3)
+	forty := make([]float64, 40)
+	for i := range three {
+		three[i] = 0.8
+	}
+	for i := range forty {
+		forty[i] = 0.8
+	}
+	cases := map[string]struct {
+		softs        []float64
+		wantResolved bool
+	}{
+		"three identical cases cannot pin a base": {three, false},
+		"forty identical cases can":               {forty, true},
+		"no cases at all":                         {nil, false},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			agg := scores.Aggregated(tc.softs)
+			if got := agg.Resolved(); got != tc.wantResolved {
+				t.Errorf("Resolved() = %v, want %v (base %d, supported %d-%d)",
+					got, tc.wantResolved, agg.Base, agg.BaseLow, agg.BaseHigh)
+			}
+			if agg.Cases > 0 && (agg.Base < agg.BaseLow || agg.Base > agg.BaseHigh) {
+				t.Errorf("base %d lies outside the range %d-%d it is supposed to sit in",
+					agg.Base, agg.BaseLow, agg.BaseHigh)
+			}
+		})
+	}
+}
+
+// TestMeasuredSeparatesUnmeasuredFromScored is the third state L1118 asks for. A skill can
+// be well scored and unmeasured, and that combination is the one worth naming: no rubric
+// dimension can detect a skill written against a failure the model does not have, because
+// such a skill is well-formed by construction.
+func TestMeasuredSeparatesUnmeasuredFromScored(t *testing.T) {
+	t.Parallel()
+	doc := []byte(`{"entries":[
+		{"skill":"measured","hash":"aaaa","bases":{"2":8},
+		 "baseline":"without the skill, 4 of 5 runs skipped the checkpoint"},
+		{"skill":"unmeasured","hash":"bbbb","bases":{"2":9},"rubric":"ed1"}
+	]}`)
+	f, err := scores.Parse(doc)
+	if err != nil {
+		t.Fatalf("Parse() = %v", err)
+	}
+	if !f.Measured("aaaa") {
+		t.Error("an entry recording a control reads as unmeasured")
+	}
+	if f.Measured("bbbb") {
+		t.Error("an entry with bases and no control reads as measured; a high score is not " +
+			"evidence that there was a problem to solve")
+	}
+	if f.Measured("cccc") {
+		t.Error("a hash the evidence has never seen reads as measured")
+	}
+	// Bases still work for both: the two questions are independent, and an unmeasured
+	// skill is not an unscored one.
+	if b, _ := f.Bases("unmeasured", "bbbb", "ed1"); len(b) == 0 {
+		t.Error("an unmeasured entry lost its bases")
+	}
+}
+
+// TestLegacyEvidenceCannotClaimAControl pins the fail-closed direction. An unbound document
+// records no hash, so nothing in it can be attributed to a particular version -- including
+// a baseline observation.
+func TestLegacyEvidenceCannotClaimAControl(t *testing.T) {
+	t.Parallel()
+	f, err := scores.Parse([]byte(`{"2":8,"3":7}`))
+	if err != nil {
+		t.Fatalf("Parse() = %v", err)
+	}
+	if f.Measured("aaaa") {
+		t.Error("a legacy document claimed a control for a hash it does not record")
+	}
+}
+
+// TestBaselineSurvivesARoundTrip guards the asymmetry that just bit: Marshal reflects over
+// Entry's tags while parseEntries names its fields one by one, so a field added to the
+// struct is written and silently dropped on the way back in. Marshal's contract says
+// Parse(Marshal(e)) yields e, and only a test makes that true of a new field.
+func TestBaselineSurvivesARoundTrip(t *testing.T) {
+	t.Parallel()
+	want := "without the skill, 4 of 5 runs skipped the checkpoint"
+	b, err := scores.Marshal([]scores.Entry{
+		{Skill: "alpha", Hash: "aaaa", Bases: map[int]int{2: 8}, Baseline: want},
+	})
+	if err != nil {
+		t.Fatalf("Marshal() = %v", err)
+	}
+	f, err := scores.Parse(b)
+	if err != nil {
+		t.Fatalf("Parse() = %v", err)
+	}
+	if len(f.Entries) != 1 || f.Entries[0].Baseline != want {
+		t.Errorf("baseline did not survive: %+v", f.Entries)
+	}
+	if !f.Measured("aaaa") {
+		t.Error("a round-tripped control reads as unmeasured")
+	}
+}
+
+// TestBasesRefuseAMismatchedRubric is the point of the edition. Right text, wrong rules is
+// as stale as wrong text: a base answers the question the rubric asked, and changing the
+// question changes what the answer means however unchanged the skill is.
+//
+// The legacy case is the migration cost and it is deliberate. Every scores file written
+// before editions existed goes stale on upgrade and has to be re-judged, because an entry
+// that records no edition cannot claim to match today's rules and reading it as a match is
+// the silent failure the field exists to stop.
+func TestBasesRefuseAMismatchedRubric(t *testing.T) {
+	t.Parallel()
+	cases := map[string]struct {
+		recorded  string
+		asked     string
+		wantStale bool
+	}{
+		"same edition":             {`,"rubric":"ed1"`, "ed1", false},
+		"the rubric changed":       {`,"rubric":"ed1"`, "ed2", true},
+		"legacy entry, no edition": {``, "ed1", true},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			doc := `{"entries":[{"skill":"alpha","hash":"aaa1","bases":{"1":8}` + tc.recorded + `}]}`
+			f, err := scores.Parse([]byte(doc))
+			if err != nil {
+				t.Fatal(err)
+			}
+			bases, stale := f.Bases("alpha", "aaa1", tc.asked)
+			if stale != tc.wantStale {
+				t.Errorf("stale = %t, want %t", stale, tc.wantStale)
+			}
+			if stale && bases != nil {
+				t.Errorf("stale bases were returned anyway: %v", bases)
+			}
+		})
+	}
+}
+
+// TestRubricAtNamesTheOtherSide covers the reporting half: a stale verdict that does not
+// say which rules produced the old number leaves the reader nothing to act on.
+func TestRubricAtNamesTheOtherSide(t *testing.T) {
+	t.Parallel()
+	f, err := scores.Parse([]byte(
+		`{"entries":[{"skill":"alpha","hash":"aaa1","bases":{"1":8},"rubric":"ed1"}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := f.RubricAt("alpha"); got != "ed1" {
+		t.Errorf("RubricAt = %q, want ed1", got)
+	}
+	if got := f.RubricAt("nobody"); got != "" {
+		t.Errorf("RubricAt = %q for an unknown skill, want empty", got)
 	}
 }

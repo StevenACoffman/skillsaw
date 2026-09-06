@@ -14,6 +14,19 @@ import (
 // default "error: ..." printer.
 type ExitError int
 
+// UsageError marks an error as a misuse of the command line — a wrong argument
+// count, a missing required flag, an invalid flag value — for which printing the
+// command's usage is the helpful response. The dispatcher prints usage for these
+// and only these: after a runtime failure (an unreadable file, a failed write, a
+// data file whose contents are wrong) the invocation itself was correct, so a flag
+// list is noise in front of the line that matters.
+//
+// Wrapping preserves the mark, so a command that already wraps an inner error needs
+// no change: errors.As finds a UsageError through fmt.Errorf("cmd: %w", err). Mark
+// the error where the knowledge is — the function that knows a flag value is invalid
+// — rather than at the call site that wraps it.
+type UsageError struct{ Err error }
+
 // Config holds shared I/O writers and the root ff.Command.
 // All subcommand configs embed *Config to inherit these.
 type Config struct {
@@ -26,19 +39,58 @@ type Config struct {
 
 func (e ExitError) Error() string { return fmt.Sprintf("exit status %d", int(e)) }
 
-// MisplacedFlag returns the first positional argument that looks like a flag
-// (starts with "-"), or "" if there is none. ff/v4 stops flag parsing at the
-// first positional, so a flag placed after arguments (e.g. "eval <dir> --json")
-// is silently swallowed as a positional; commands that take positional paths use
-// this to fail loudly. It returns the offending token so the caller builds the
-// error in its own package with a command-specific prefix.
-func MisplacedFlag(args []string) string {
+// Error reports the wrapped message. The zero UsageError is constructible by any
+// caller, so it describes itself rather than panicking on a nil Err — a panic while
+// reporting a failure would bury the failure it was reporting.
+func (e UsageError) Error() string {
+	if e.Err == nil {
+		return "usage error"
+	}
+	return e.Err.Error()
+}
+
+// Unwrap exposes the underlying error so errors.Is/As reach past the marker.
+func (e UsageError) Unwrap() error { return e.Err }
+
+// Usagef returns a UsageError whose message is formatted as fmt.Errorf does, so a
+// %w verb still wraps an underlying error.
+//
+// It returns the concrete UsageError rather than error so that callers returning it
+// are not reported by wrapcheck: there is no external error here to wrap, since this
+// is the constructor of the error itself.
+func Usagef(format string, args ...any) UsageError {
+	return UsageError{Err: fmt.Errorf(format, args...)}
+}
+
+// MisplacedFlag reports a positional argument that looks like a flag (starts with
+// "-"), as a UsageError naming the command.
+//
+// ff/v4 stops flag parsing at the first positional, so a flag placed after arguments
+// (e.g. "eval <dir> --json") is silently swallowed as a positional; commands that
+// take positional paths call this to fail loudly.
+//
+// It returns the finished error rather than the offending token. Fifteen callers
+// spelled the same sentence fifteen times, which is one wording that can drift in
+// fifteen places and — since the dispatcher now decides on the error's type — fifteen
+// places that could each forget the mark. The command-specific prefix is the only
+// thing that varied, so it is the only thing a caller passes.
+//
+// It returns the concrete UsageError with a comma-ok bool rather than a nil error,
+// for the reason Usagef documents: a caller returning an error-typed value from
+// another package is reported by wrapcheck, and there is nothing here to wrap.
+//
+// Requires: name is the command's name, as it appears in its messages.
+// Ensures:  pure. ok is false and the UsageError is the zero value when no argument
+// looks like a flag.
+func MisplacedFlag(name string, args []string) (UsageError, bool) {
 	for _, a := range args {
 		if len(a) > 1 && a[0] == '-' {
-			return a
+			return Usagef(
+				"%s: %q looks like a flag after arguments; put flags before positional arguments",
+				name, a), true
 		}
 	}
-	return ""
+	return UsageError{}, false
 }
 
 // New returns a new root Config with the given I/O writers.

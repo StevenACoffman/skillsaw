@@ -7,7 +7,6 @@ package judge
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -78,6 +77,9 @@ type allReport struct {
 	Cases    []caseScore `json:"cases"`
 	MeanSoft float64     `json:"mean_soft"`
 	Base     int         `json:"base"`
+	BaseLow  int         `json:"base_low"`
+	BaseHigh int         `json:"base_high"`
+	Resolved bool        `json:"resolved"`
 }
 
 // Config holds the judge command configuration.
@@ -180,7 +182,7 @@ func (cfg *Config) resolveChecks() ([]judgelib.Check, error) {
 	case cfg.Checks != "":
 		return cfg.loadChecks()
 	default:
-		return nil, errors.New("judge: one of --checks or --from-test-prompts is required")
+		return nil, root.Usagef("judge: one of --checks or --from-test-prompts is required")
 	}
 }
 
@@ -251,11 +253,11 @@ func (cfg *Config) emit(res judgelib.Result) error {
 // scoreAll scores every behavioral case and reports the base their mean implies.
 func (cfg *Config) scoreAll() error {
 	if cfg.FromTestPrompts == "" {
-		return errors.New("judge: --all needs --from-test-prompts; there is no per-case " +
+		return root.Usagef("judge: --all needs --from-test-prompts; there is no per-case " +
 			"notion with a single --checks set")
 	}
 	if cfg.Outputs == "" {
-		return errors.New("judge: --all needs --outputs DIR holding out-<id>.txt per case")
+		return root.Usagef("judge: --all needs --outputs DIR holding out-<id>.txt per case")
 	}
 	f, err := testprompts.Load(cfg.FromTestPrompts)
 	if err != nil {
@@ -303,6 +305,7 @@ func (cfg *Config) scoreAll() error {
 	}
 	agg := scores.Aggregated(softs)
 	rep.MeanSoft, rep.Base = agg.MeanSoft, agg.Base
+	rep.BaseLow, rep.BaseHigh, rep.Resolved = agg.BaseLow, agg.BaseHigh, agg.Resolved()
 	return cfg.emitAll(&rep)
 }
 
@@ -338,5 +341,14 @@ func (cfg *Config) emitAll(rep *allReport) error {
 	}
 	_, _ = fmt.Fprintf(cfg.Stdout, "%d case(s), mean soft %.3f, base %d\n",
 		len(rep.Cases), rep.MeanSoft, rep.Base)
+	if !rep.Resolved {
+		// Said plainly rather than as a footnote on the number: a base copied into a
+		// scores file is applied as if it were measured, and nothing downstream can tell
+		// that this sample could not separate it from its neighbours.
+		_, _ = fmt.Fprintf(cfg.Stdout,
+			"  unresolved: %d case(s) support base %d-%d; score more cases before "+
+				"treating %d as measured\n",
+			len(rep.Cases), rep.BaseLow, rep.BaseHigh, rep.Base)
+	}
 	return nil
 }

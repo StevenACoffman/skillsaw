@@ -9,16 +9,14 @@ package changed
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/peterbourgon/ff/v4"
 
 	"github.com/StevenACoffman/skillet/manifest"
-	"github.com/StevenACoffman/skillet/skill"
 	"github.com/StevenACoffman/skillsaw/cmd/root"
+	"github.com/StevenACoffman/skillsaw/internal/inventory"
 )
 
 // Config holds the changed command configuration.
@@ -82,25 +80,22 @@ This is a query, not a gate: it exits 0 whether or not anything is stale. Use
 }
 
 func (cfg *Config) exec(_ context.Context, args []string) error {
-	if bad := root.MisplacedFlag(args); bad != "" {
-		return fmt.Errorf(
-			"changed: %q looks like a flag after arguments; put flags before positional arguments",
-			bad,
-		)
+	if err, bad := root.MisplacedFlag("changed", args); bad {
+		return err
 	}
 	if len(args) > 0 {
-		return errors.New("changed: takes no positional arguments; pass --tree DIR")
+		return root.Usagef("changed: takes no positional arguments; pass --tree DIR")
 	}
 	if cfg.Manifest == "" {
-		return errors.New("changed: --manifest is required")
+		return root.Usagef("changed: --manifest is required")
 	}
 	base, err := loadManifest(cfg.Manifest)
 	if err != nil {
 		return err
 	}
-	cur, err := scan(cfg.Tree)
+	cur, err := inventory.Tree(cfg.Tree)
 	if err != nil {
-		return err
+		return fmt.Errorf("changed: %w", err)
 	}
 	delta := manifest.Diff(base, cur)
 	return cfg.emit(&delta)
@@ -117,32 +112,6 @@ func loadManifest(path string) (manifest.Manifest, error) {
 		return manifest.Manifest{}, fmt.Errorf("changed: %w", err)
 	}
 	return m, nil
-}
-
-// scan walks tree into the manifest shape Diff compares against.
-//
-// A struct literal rather than manifest.Build: Build also takes the emitting tool and
-// whether every gate passed, and neither has a meaning for a tree that has just been
-// walked. Diff reads only Tree and Skills.
-//
-// A skill that fails to load is still recorded, with no hash. Diff counts an unknown
-// hash as changed, so it lands in the campaign; dropping it here would remove it from
-// the tree's inventory entirely and it would never be looked at again. One unreadable
-// skill also must not abort the walk -- the other two hundred still need triaging.
-func scan(tree string) (manifest.Manifest, error) {
-	dirs, err := skill.Discover(tree)
-	if err != nil {
-		return manifest.Manifest{}, fmt.Errorf("changed: %w", err)
-	}
-	skills := make([]manifest.Skill, 0, len(dirs))
-	for _, dir := range dirs {
-		entry := manifest.Skill{Slug: filepath.Base(dir), Dir: dir}
-		if s, err := skill.Load(dir); err == nil {
-			entry.Hash = s.Hash()
-		}
-		skills = append(skills, entry)
-	}
-	return manifest.Manifest{Tree: tree, Skills: skills}, nil
 }
 
 // emit renders the delta as JSON (--json) or one location per line.

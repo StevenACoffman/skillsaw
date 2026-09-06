@@ -4,7 +4,6 @@ package verified
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 
@@ -53,14 +52,11 @@ looking for structural defects in a tree that was never examined.`,
 }
 
 func (cfg *Config) exec(_ context.Context, args []string) error {
-	if bad := root.MisplacedFlag(args); bad != "" {
-		return fmt.Errorf(
-			"verified: %q looks like a flag after arguments; put flags before positional arguments",
-			bad,
-		)
+	if err, bad := root.MisplacedFlag("verified", args); bad {
+		return err
 	}
 	if len(args) != 1 {
-		return errors.New("verified: pass exactly one skills-manifest.json")
+		return root.Usagef("verified: pass exactly one skills-manifest.json")
 	}
 	m, err := load(args[0])
 	if err != nil {

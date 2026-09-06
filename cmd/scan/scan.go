@@ -6,7 +6,6 @@ package scan
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -65,11 +64,8 @@ spec §9.2) are reported verbatim here; classify them downstream.`,
 }
 
 func (cfg *Config) exec(_ context.Context, args []string) error {
-	if bad := root.MisplacedFlag(args); bad != "" {
-		return fmt.Errorf(
-			"scan: %q looks like a flag after arguments; put flags before positional arguments",
-			bad,
-		)
+	if err, bad := root.MisplacedFlag("scan", args); bad {
+		return err
 	}
 	dirs := args
 	if cfg.All {
@@ -80,7 +76,7 @@ func (cfg *Config) exec(_ context.Context, args []string) error {
 		dirs = found
 	}
 	if len(dirs) == 0 {
-		return errors.New("scan: no skills found; pass SKILL_DIR arguments or use --all")
+		return root.Usagef("scan: no skills found; pass SKILL_DIR arguments or use --all")
 	}
 
 	var results []dirHits

@@ -1,0 +1,11 @@
+# framed as accepting the assistant's own prior suggestion
+[Previous assistant message]:
+That's ready to go. Two ways to proceed:
+
+1. {{SKILL}} — work through it here, checking between steps
+2. A separate session — batch it and review at the end
+
+Which do you want?
+
+[Your response]:
+{{SKILL}}, please

@@ -213,3 +213,63 @@ func TestPreflightWithoutAgainstIsUnchanged(t *testing.T) {
 		t.Fatalf("a sound skill was rejected: %v\n%s", err, out)
 	}
 }
+
+// TestHistoryReportsTheCurrentStreak checks the operator-facing half of L970 through the
+// real CLI. The recovered case is the one that matters: three failures with a keep in the
+// middle is not a three-failure streak, and a report that said so would be describing how
+// long the loop has run rather than how the skill is doing.
+func TestHistoryReportsTheCurrentStreak(t *testing.T) {
+	t.Parallel()
+	cases := map[string]struct{ statuses, want, absent []string }{
+		"a live streak is reported": {
+			statuses: []string{"keep", "revert", "revert"},
+			want: []string{
+				"2 consecutive non-improving experiment(s), 0 of them harness errors",
+			},
+		},
+		"a recovery resets it": {
+			statuses: []string{"revert", "revert", "keep"},
+			absent:   []string{"consecutive non-improving"},
+		},
+		"an all-error streak names the harness": {
+			statuses: []string{"keep", "error", "error"},
+			want: []string{
+				"2 consecutive non-improving experiment(s), 2 of them harness errors",
+				"evidence about the harness, not the skill",
+			},
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			assertHistorySays(t, tc.statuses, tc.want, tc.absent)
+		})
+	}
+}
+
+// assertHistorySays logs one row per status, reads the log back through the history
+// command, and checks what the report does and does not say.
+func assertHistorySays(t *testing.T, statuses, want, absent []string) {
+	t.Helper()
+	f := filepath.Join(t.TempDir(), "results.tsv")
+	for _, s := range statuses {
+		out, err := run(t, "log", "--file", f, "--skill", "alpha", "--status", s)
+		if err != nil {
+			t.Fatalf("log %s failed: %v\n%s", s, err, out)
+		}
+	}
+	out, err := run(t, "history", "--file", f)
+	if err != nil {
+		t.Fatalf("history failed: %v\n%s", err, out)
+	}
+	for _, w := range want {
+		if !strings.Contains(out, w) {
+			t.Errorf("output is missing %q:\n%s", w, out)
+		}
+	}
+	for _, a := range absent {
+		if strings.Contains(out, a) {
+			t.Errorf("output still reports %q:\n%s", a, out)
+		}
+	}
+}

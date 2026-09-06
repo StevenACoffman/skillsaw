@@ -1,0 +1,4 @@
+# a skill-like token sits next to a negation; the request is still the request
+{{TASK}}
+
+Don't bother with anything heavyweight or process-driven for this one. {{SKILL}}, please.

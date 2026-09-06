@@ -7,8 +7,8 @@ package diagnose
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"os"
 
 	"github.com/peterbourgon/ff/v4"
 
@@ -22,6 +22,7 @@ type Config struct {
 	*root.Config
 	JSON    bool
 	Flags   *ff.FlagSet
+	Against string
 	Command *ff.Command
 }
 
@@ -31,6 +32,8 @@ func New(parent *root.Config) *Config {
 	cfg.Config = parent
 	cfg.Flags = ff.NewFlagSet("diagnose").SetParent(parent.Flags)
 	cfg.Flags.BoolVar(&cfg.JSON, 0, "json", "emit diagnoses as JSON")
+	cfg.Flags.StringVar(&cfg.Against, 0, "against", "",
+		"an earlier \"eval --json\" output to compare the target dimension against")
 	cfg.Command = &ff.Command{
 		Name:      "diagnose",
 		Usage:     "skillsaw diagnose [FLAGS] SKILL_DIR [SKILL_DIR ...]",
@@ -42,7 +45,18 @@ the dim2/3/4 correlated cluster — a note to inspect all three together.
 
 A runtime-neutrality hit forces a P0 "runtime drift" target ahead of any
 dimension (spec §9.3). This command performs no edits; it scopes the edit a
-model should make.`,
+model should make.
+
+With --against, pointed at an earlier "eval --json", the target dimension is also
+compared with its previous score. A dimension that scored higher before and lower
+now is a different event from one that has never been clean, and the two want
+opposite next moves: a regression has a known-good previous version, so the cheap
+step is reading the diff since then rather than reworking the dimension. Without
+--against nothing is compared, and the diagnosis says so by leaving the transition
+unset rather than by implying stability.
+
+Evaluations produced under different rubric editions are not compared at all —
+scores from different rules are not a before and an after.`,
 		Flags: cfg.Flags,
 		Exec:  cfg.exec,
 	}
@@ -51,14 +65,15 @@ model should make.`,
 }
 
 func (cfg *Config) exec(_ context.Context, args []string) error {
-	if bad := root.MisplacedFlag(args); bad != "" {
-		return fmt.Errorf(
-			"diagnose: %q looks like a flag after arguments; put flags before positional arguments",
-			bad,
-		)
+	if err, bad := root.MisplacedFlag("diagnose", args); bad {
+		return err
 	}
 	if len(args) == 0 {
-		return errors.New("diagnose: pass at least one SKILL_DIR")
+		return root.Usagef("diagnose: pass at least one SKILL_DIR")
+	}
+	previous, err := cfg.loadAgainst()
+	if err != nil {
+		return err
 	}
 	rcfg := rubric.DefaultConfig()
 	var diags []rubric.Diagnosis
@@ -68,7 +83,8 @@ func (cfg *Config) exec(_ context.Context, args []string) error {
 			_, _ = fmt.Fprintf(cfg.Stderr, "skip %s: %v\n", dir, err)
 			continue
 		}
-		diags = append(diags, rubric.Diagnose(rubric.Evaluate(s, rcfg)))
+		ev := rubric.Evaluate(s, rcfg)
+		diags = append(diags, rubric.DiagnoseAgainst(ev, previous[ev.Skill]))
 	}
 	if len(diags) == 0 {
 		return root.ExitError(1)
@@ -108,4 +124,29 @@ func (cfg *Config) render(diags []rubric.Diagnosis) {
 			_, _ = fmt.Fprintf(cfg.Stdout, "  - %s\n", f)
 		}
 	}
+}
+
+// loadAgainst reads the earlier evaluations, keyed by skill so a run over several
+// directories compares each with its own baseline rather than with whichever came first.
+//
+// A file that names skills this run does not is not an error: an optimize loop diagnoses a
+// subset of what it last evaluated, and refusing would make the flag unusable exactly when
+// it is most useful.
+func (cfg *Config) loadAgainst() (map[string]*rubric.Evaluation, error) {
+	out := map[string]*rubric.Evaluation{}
+	if cfg.Against == "" {
+		return out, nil
+	}
+	b, err := os.ReadFile(cfg.Against)
+	if err != nil {
+		return nil, fmt.Errorf("diagnose: read %s: %w", cfg.Against, err)
+	}
+	var evals []*rubric.Evaluation
+	if err := json.Unmarshal(b, &evals); err != nil {
+		return nil, fmt.Errorf("diagnose: parse %s as \"eval --json\" output: %w", cfg.Against, err)
+	}
+	for _, ev := range evals {
+		out[ev.Skill] = ev
+	}
+	return out, nil
 }
