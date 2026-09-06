@@ -2645,7 +2645,38 @@ row — but only after that row was fixed: as first written the new skill arrive
 so `was == now` short-circuited before the rule was reached and the row passed with the rule
 deleted. A vacuous test that looked like coverage.
 
-- [ ] **Tiering makes one thing invisible: an outbound demotion by the pointing skill.**
+- [x] **Tiering makes one thing invisible: an outbound demotion by the pointing skill.**
+  DONE (2026-08-27) as `orphan.Demotion` and the `demoted-outbound-edge` finding.
+
+  **A separate type, not a richer `Change`.** `Change` asks *"is this skill still
+  covered"*; a `Demotion` asks *"did this relationship weaken"*. Folding the second into
+  the first would leave `Orphaned` and `Weakened` ambiguous about which they mean. The
+  finding is also keyed on the **source** — the skill whose bullet changed, which is the
+  file to open — and a target-keyed finding structurally cannot name it.
+
+  **Verified against the instance this entry was filed on.** Demoting
+  `go-beyond-packages-as-layers`' `composes-with` edge to `go-beyond-four-tenet-layout` on
+  a copy of the real 288-skill corpus previously reported *"nothing was disconnected or
+  demoted"*, because two other skills still point at the target with `depends-on`. It now
+  reports the edge and the file. One edit yields exactly one demotion and zero changes;
+  two identical trees yield none, so there is no false-positive floor at 426 edges.
+
+  Three rules, each with a planted control run against it: **both endpoints must exist in
+  both trees** (a deleted skill's edges are a deletion, and listing them as demotions
+  buries it — neutering this reports them and fails the test); **strict rank decrease
+  only** (reversing the comparison fails the demotion test); and **a superseded source is
+  suppressed**, the rule `retired` already applies to targets.
+
+  **Double-reporting is accepted and documented rather than suppressed.** When the demoted
+  edge was also the target's strongest, a `Change` and a `Demotion` both fire for one edit.
+  Suppressing would make `Demotions` mean "the demotions the tier missed" — a type defined
+  by what another type failed to catch, which is worse to hand a reader than one edit
+  described twice from two grains.
+
+  `--strict` blocks on them, on the same footing as the other two and for the same reason:
+  it is regression-relative, so it cannot fire on a pre-existing state. That is the
+  property that made the other two safe to gate on and the absolute orphan count not.
+  Original entry:
   `Weakened` compares the strongest inbound edge, so if two skills point at X with
   `composes-with` and one demotes to `contrasts-with`, X's strongest is still
   `composes-with` and nothing is reported. Correct by the current definition and arguably a
@@ -2660,7 +2691,20 @@ Source: exegesis deferred this pending a siting question and the answer came bac
 there". exegesis is snapshot-shaped — one `manifest.Build` call, **zero** `manifest.Diff` —
 and a regression-relative gate would cost it that property permanently for one check.
 
-- [ ] **Report what a change orphaned: a skill that lost its last inbound edge.**
+- [x] **Report what a change orphaned: a skill that lost its last inbound edge.** DONE
+  (2026-08-27) — the absolute half shipped as `Survey` earlier the same day; this closes the
+  regression-relative half against a manifest baseline, as `skillsaw orphans
+  --base-manifest FILE`. `--base-tree` remains the preferred path and the help text now says
+  which is which, because the "Built" section's argument against recorded edges was never
+  overturned: two trees go through one parser at one version and cannot drift from
+  themselves, while a recorded edge is a snapshot that can. `--base-manifest` is for the
+  case skillet's field doc names — the baseline is a published artifact and the checkout is
+  gone. Passing both is an error rather than a precedence rule: the two baselines are not
+  equally trustworthy, so silently preferring either would decide the answer on a rule
+  nobody would remember.
+  Both `Uncoupled` rules and `Convention` carried across unchanged, as the entry required —
+  `Compare` already held the first two and `Unadopted` already reported the third.
+  Original entry:
   `coherence`'s `OrphanEndpoints` meter (`internal/drift/drift.go:198`) is the shape:
   `NewlyOrphanedEndpoints` **and** `NewlyCoveredEndpoints` — both directions, so the gate
   is regression-relative rather than absolute — plus `BaseAvailable`, keeping *"no
@@ -2724,7 +2768,52 @@ and a regression-relative gate would cost it that property permanently for one c
     the failure recorded twice in adh's harvest line, and the promotion above is
     independently justified, so there is useful work that does not wait on it.
 
-- [ ] **Populate `Skill.Edges` in `inventory`, and read it in the gate.** The baseline
+- [x] **Populate `Skill.Edges` in `inventory`, and read it in the gate.** DONE (2026-08-27),
+  on skillet v0.26.0, which is the release that carries `manifest.Skill.Edges` and
+  `Manifest.EdgesRecorded`. `inventory.Entry` records the graph off the same `skill.Load`
+  that produces the hash — no second read, and an unloadable skill leaves `Hash` and `Edges`
+  both empty under one rule rather than two — and `Tree` sets `EdgesRecorded`.
+  `RecordedGraph` is the inverse, and `orphans --base-manifest` is the consumer.
+
+  **Two premises in this entry were wrong, and the second is the one that matters.**
+
+  1. *"`internal/inventory` calls `manifest.Build`"* — it does not, and more to the point
+     **skillsaw never writes a manifest to disk at all.** `inventory.Tree` builds a literal
+     for `Diff` and nothing serialises it; `exegesis verify` is the only producer in the
+     family (`cmd/verify/verify.go:468`). So the producer half landing here does not put
+     edges in any manifest a user has. Verified against the real corpus: `orphans
+     --base-manifest` on `books/site-reliability-engineering/skills-manifest.json` refuses,
+     naming exegesis. **The exegesis half is therefore the whole producer story and is still
+     owed** — see the follow-up below, which is not a duplicate of this entry.
+  2. *"It must land in the same change as exegesis's `verify`"* — **relaxed by a skillet
+     change made after this was filed.** `Manifest.EdgesRecorded` (skillet `21548f1`) exists
+     so a producer that does not record edges fails **closed**: the consumer reads the graph
+     as unavailable and declines. exegesis lagging cannot produce phantom diffs; it produces
+     a refusal that names the repair. So the two halves may land apart, and this one did.
+
+  **The refusal is the load-bearing part, and it was planted before it was trusted.** A
+  manifest whose producer never read the graph is byte-identical to one describing a tree
+  with no edges — which is exactly why skillet put the flag on the manifest rather than
+  inferring it per skill. Replacing the guard with a fallback to an empty graph makes
+  `orphans` print `nothing was disconnected or demoted` against a baseline that never
+  existed, and passes every other test in the file; the control was run against that planted
+  version and caught it.
+
+  **Measured end to end on the real 288-skill tree**, since a gate nobody ran on real data
+  is the failure this file records against itself repeatedly. A recorded manifest of
+  `~/.claude/skills` compared against the unmodified tree reports no change; demoting one
+  real `composes-with` to `contrasts-with` reports
+  `context-intent-action-for-ai-models: weakened-inbound-edge`, **identical to what
+  `--base-tree` reports for the same edit**, and `--strict` exits 1. The two baselines were
+  shown to answer the same question rather than merely both producing output.
+
+  **Recording edges cannot move `Diff`,** and that is asserted from this side as well as
+  skillet's. Edges live inside SKILL.md so an edge change already moves `Hash`; if `Diff`
+  read them too, every graph edit would report on two axes and the campaign triage the
+  manifest exists for would double-count it. skillet pins the rule; the producer change is
+  what would break it.
+
+  Original entry: The baseline
   decision (2026-08-27) is that `manifest.Skill` carries the edge *targets* a skill
   declares; the kernel change is filed in skillet. This repo owes both halves.
 
@@ -2763,3 +2852,125 @@ and a regression-relative gate would cost it that property permanently for one c
   out-of-vocabulary kinds are still unread. An orphan count is only as good as the graph
   beneath it. Report the count alongside how much of the corpus the reader could see, so
   the two are never separated.
+
+  **Done, and narrower than the caveat asked for.** `orphan.Coverage` is a field on
+  `Report`, computed by both `Survey` and `Compare`, so the count and the extent arrive
+  together rather than the extent being a line a caller can forget to print. It carries the
+  skills read, the edges read, and how many of those name a slug absent from this tree —
+  read, and covering nothing. On `~/.claude/skills`: 288 skills, 426 edges, 47 dangling.
+  It is printed as a **floor**, in those words, because two things are unread and neither
+  can be counted from here. See the `TitleRefs` finding below for why the display-title half
+  of the caveat is not merely unimplemented but unimplementable with the tool it named.
+
+## What the Orphan Gate's Manifest Path Turned Up (2026-08-27)
+
+Three findings from building `--base-manifest`, filed separately because each outlives it.
+
+- [ ] **exegesis must record edges, and the conversion should be promoted before it does.**
+  **The promotion is done (2026-08-27, skillet `6115cc3`, unreleased):** `related.EdgeMap`
+  and `related.EdgesFrom` in `related/record.go`, sited there because `manifest` is
+  stdlib-only and cannot import `related` — which is why the field is a
+  `map[string][]string` in the first place. What remains is the two consumers, and **both
+  wait on a skillet release**; there is no `go.work` and no `replace`, and both repos pin
+  v0.26.0.
+
+  Owed, in one change so the two producers cannot skew:
+  1. **exegesis `verify`** — `skillReport` gains `edges` from `related.ParseSection(s.Body)`
+     in the same `skill.Load` branch that sets `hash`, so an unloadable skill leaves both
+     empty under one rule; `writeManifest` encodes with `related.EdgeMap` and sets
+     `EdgesRecorded` on the built manifest. `manifest.Build` does not take the flag —
+     it takes the emitting tool and whether gates passed, and "did the producer read the
+     graph" is neither — so it is set on the returned value.
+  2. [x] **skillsaw** — delete `inventory.edgeMap` and `sortedKeys` for `related.EdgeMap` and
+     `related.EdgesFrom` (Done 2026-08-25). All existing tests passed **unchanged**, verifying
+     that the promotion of the edge mapping implementation to skillet v0.27.0 was fully
+     backward-compatible and faithful.
+
+  **The check that settles it is not a unit test.** `orphans --base-manifest` against an
+  exegesis-written manifest is refused today (verified on
+  `books/site-reliability-engineering/skills-manifest.json`). Afterwards it must be
+  accepted *and* report the same regression `--base-tree` reports for the same edit. That
+  is the only thing that demonstrates the two producers agree.
+  Original entry:
+  skillsaw's producer half is done and reaches no manifest on disk, because skillsaw writes
+  none — `exegesis verify` is the family's only manifest producer. Until it records edges,
+  `orphans --base-manifest` refuses every real manifest in the corpus. The refusal is
+  correct and the feature is unexercisable outside tests.
+  **Do not simply copy `inventory.edgeMap` into exegesis.** Both producers need the same
+  answer to "an edge as the manifest spells it — kind to sorted targets, rationale dropped",
+  and a second hand-written copy is precisely the drift `speclint`, `redlines` and `related`
+  were each promoted to end. The second consumer is what promotes, and it is arriving: the
+  pair belongs in `skillet/related` as the encoder/decoder for a field `manifest` cannot
+  hold itself, since `manifest` is deliberately stdlib-only and cannot import `related`.
+  That is a skillet release and two `go.mod` bumps, which is why it is filed rather than
+  taken in the same pass.
+
+- [x] **`related.TitleRefs` cannot count the display-title bullets the caveat asks about.**
+  FIXED UPSTREAM (2026-08-27, skillet `c1ab378`, unreleased). `isKindToken` asks
+  `canonicalKind` instead of the token's shape: `~/.claude/skills` goes 339 → 185 refs and
+  `~/.agents/skills` 251 → 119, with resolved unchanged at 59 and 53 — nothing real
+  filtered out, only the phantoms.
+  **The filing under-rated it.** The same predicate existed twice, and the copy that
+  mattered was `resolvedTitleFor`, which backs `ResolveTitles` and **rewrites bullets on
+  disk**: with the old test it turns `- **Depends On** — *composes-with* → why` into
+  `- **dependency-direction** — …`, making a kind marker into a target.
+  **No change here.** `orphan.Coverage` still reports a floor and still does not count
+  display titles: doing so needs a tree walk to resolve them, and a count of *unresolvable*
+  references is a different number from what the caveat asks for. Revisit only if the
+  caveat is reopened. Original entry:
+  using it would put a wrong number under a heading that claims honesty.**
+  Measured on `~/.claude/skills`: **339 refs against 426 edges**, of which 6 resolve. What
+  it names are the *kinds* of well-formed bullets — `composes-with`, `depends-on` — not
+  display titles. `boldLeads` returns the bold token at the head of every bullet in the
+  section, and `TitleRefs` filters that population with `strings.Contains(tok, "_")`,
+  commented "a kind in the bold position". **The canonical kinds are hyphenated, so the
+  filter matches none of them.** On `~/.agents/skills` it is 251 refs and 0 resolved.
+  This is an upstream defect to file against skillet, not a caller mistake, and it is why
+  `Coverage` reports a floor rather than the display-title count. An unresolved bullet is
+  visibly unread; a count that says 339 bullets were missed when the parser read them fine
+  is the flattering-and-wrong direction the family refuses everywhere else.
+
+- [x] **An error from any subcommand prints 35 lines of usage before the message.** DONE
+  (2026-08-27). `root.UsageError` marks a misuse of the command line — a wrong argument
+  count, a missing required flag, an invalid flag value — and the dispatcher prints usage
+  for those and nothing else. Measured on the two that motivated it: the unreadable
+  manifest and the producer gap go from 35 lines to **1**, and every misuse still prints
+  its help.
+  **The predicate is the error's type, not a list of exceptions, and that is the fix rather
+  than an implementation detail.** The rule it replaces named `ErrNoExec` and `ExitError`,
+  so every error added after it was written defaulted to printing usage — the wrong
+  default, applied silently, which is how this survived. The invariant is now pinned as a
+  correspondence (`TestUsageIsPrintedForMisuseAndNothingElse`): usage appears **iff**
+  `errors.As` finds a `UsageError`. A test over one example would not have caught the
+  original.
+  **Usage rendering also collapsed from three sites to one.** `Parse`, the unknown
+  subcommand and the command's own error each printed their own help; two of the three were
+  outside the rule the third was applying, so a change to the rule could miss them.
+  **`MisplacedFlag` now returns the finished error.** Fifteen callers spelled one sentence
+  fifteen times — one wording able to drift in fifteen places, and, once the dispatcher
+  decides on type, fifteen places that could each forget the mark. It returns the concrete
+  `UsageError` with a comma-ok bool for the reason `Usagef` documents: an error-typed value
+  returned from another package is reported by `wrapcheck`, and there is nothing to wrap.
+  **The test's first probe was wrong in a way worth keeping.** It looked for `FLAGS` in the
+  output; the root command declares no flags, so its help omits that section and the
+  unknown-subcommand row failed against working code. `USAGE` heads every rendered block.
+  Original entry: Measured:
+  `changed --manifest /nonexistent.json` and `orphans --base-manifest` on an
+  edgeless manifest both dump the full help, then the real error last.
+  **This is the same defect the `preflight` entry named on 2026-08-24** — *"because the
+  error reaches `ff`'s handler it prints the full usage text, so a missing file reads as
+  though the caller mistyped a flag"*. That entry fixed the abort, not the dump, and the
+  dump is CLI-wide rather than per-command: it lives in the dispatcher's error path, so
+  fixing it in one command would be inconsistent and fixing it once would fix it everywhere.
+  It bites hardest exactly where a message names a repair, since the repair scrolls off.
+  Found by running the command against a real manifest, not by a test — `run()` returns the
+  error separately from stdout, so no existing test can see it.
+
+- Note, not a work item: **L2648's tiering gap now has a real instance.** It was filed as
+  reasoning; demoting `go-beyond-packages-as-layers`' `composes-with` edge to
+  `go-beyond-four-tenet-layout` on a copy of the real corpus is reported as **nothing**,
+  because `go-beyond-service-transaction-boundary` and `go-beyond-three-consumer-error`
+  still point at the target with `depends-on` and the strongest inbound is unchanged. The
+  tool is correct by its current definition and the corpus lost a use relationship. A target
+  with a single inbound edge (`context-intent-action-for-ai-models`) is caught, which is
+  what makes the boundary of the gap concrete rather than theoretical.

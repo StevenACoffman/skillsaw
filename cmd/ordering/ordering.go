@@ -5,7 +5,6 @@ package ordering
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -88,17 +87,14 @@ costs.`,
 }
 
 func (cfg *Config) exec(_ context.Context, args []string) error {
-	if bad := root.MisplacedFlag(args); bad != "" {
-		return fmt.Errorf(
-			"ordering: %q looks like a flag after arguments; put flags before positional arguments",
-			bad,
-		)
+	if err, bad := root.MisplacedFlag("ordering", args); bad {
+		return err
 	}
 	if cfg.Skill == "" {
-		return errors.New("ordering: --skill is required; there is nothing to look for without it")
+		return root.Usagef("ordering: --skill is required; there is nothing to look for without it")
 	}
 	if len(args) == 0 {
-		return errors.New("ordering: pass at least one transcript")
+		return root.Usagef("ordering: pass at least one transcript")
 	}
 	reports := make([]report, 0, len(args))
 	failed := false

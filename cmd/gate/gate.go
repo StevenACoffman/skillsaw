@@ -7,7 +7,6 @@ package gate
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
 
@@ -71,7 +70,7 @@ Exit code is 0 on any accept, 1 on reject, so a script can branch on it.`,
 
 func (cfg *Config) exec(_ context.Context, _ []string) error {
 	if cfg.Candidate == "" || cfg.Current == "" {
-		return errors.New("gate: --candidate and --current are required")
+		return root.Usagef("gate: --candidate and --current are required")
 	}
 	cand, err := parseScore("candidate", cfg.Candidate)
 	if err != nil {
@@ -119,7 +118,7 @@ func (cfg *Config) exec(_ context.Context, _ []string) error {
 func parseScore(name, v string) (float64, error) {
 	f, err := strconv.ParseFloat(v, 64)
 	if err != nil {
-		return 0, fmt.Errorf("gate: --%s: invalid score %q", name, v)
+		return 0, root.Usagef("gate: --%s: invalid score %q", name, v)
 	}
 	return f, nil
 }
@@ -127,7 +126,7 @@ func parseScore(name, v string) (float64, error) {
 func parseStep(name, v string) (int, error) {
 	n, err := strconv.Atoi(v)
 	if err != nil {
-		return 0, fmt.Errorf("gate: --%s: invalid integer %q", name, v)
+		return 0, root.Usagef("gate: --%s: invalid integer %q", name, v)
 	}
 	return n, nil
 }

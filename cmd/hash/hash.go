@@ -6,7 +6,6 @@ package hash
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -58,21 +57,18 @@ grade under today's rules, and says nothing about having done so — which is wh
 }
 
 func (cfg *Config) exec(_ context.Context, args []string) error {
-	if bad := root.MisplacedFlag(args); bad != "" {
-		return fmt.Errorf(
-			"hash: %q looks like a flag after arguments; put flags before positional arguments",
-			bad,
-		)
+	if err, bad := root.MisplacedFlag("hash", args); bad {
+		return err
 	}
 	if cfg.Rubric {
 		if len(args) > 0 {
-			return errors.New("hash: --rubric describes the rules, not a skill; pass no paths")
+			return root.Usagef("hash: --rubric describes the rules, not a skill; pass no paths")
 		}
 		_, _ = fmt.Fprintln(cfg.Stdout, rubric.Edition())
 		return nil
 	}
 	if len(args) == 0 {
-		return errors.New("hash: pass at least one SKILL_DIR or SKILL.md path")
+		return root.Usagef("hash: pass at least one SKILL_DIR or SKILL.md path")
 	}
 	failed := false
 	for _, arg := range args {

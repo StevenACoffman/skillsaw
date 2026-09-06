@@ -9,7 +9,6 @@ package regression
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -94,13 +93,12 @@ func (cfg *Config) registerFlags(parent *root.Config) {
 
 func (cfg *Config) exec(_ context.Context, args []string) error {
 	if len(args) > 0 {
-		return fmt.Errorf(
+		return root.Usagef(
 			"regression: unexpected argument %q; the skill is named by --skill",
-			args[0],
-		)
+			args[0])
 	}
 	if cfg.Skill == "" {
-		return errors.New("regression: --skill is required; one log holds many skills")
+		return root.Usagef("regression: --skill is required; one log holds many skills")
 	}
 	rows, err := cfg.read()
 	if err != nil {

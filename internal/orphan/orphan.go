@@ -33,6 +33,57 @@ type Change struct {
 	Now  related.Kind `json:"now,omitempty"`
 }
 
+// Coverage says how much of the current tree's graph the reader could actually see.
+//
+// It is a field on Report rather than something a caller computes beside it, because an
+// orphan count is only as good as the graph beneath it and the two must not be separable:
+// a caller free to print one without the other will eventually print one without the
+// other. The measurement that motivated this found the readable graph moving from 222 to
+// 357 edges in a single day.
+//
+// **It is a floor, not a total.** Two things are unread and neither is counted here. A
+// bullet written in a kind outside the vocabulary is dropped by the parser without a
+// record, so nothing downstream can count it. A bullet naming a skill by display title is
+// likewise not an edge, and related.TitleRefs cannot be used to count those: measured over
+// the real 288-skill tree it returns 339 refs against 426 edges, and what it names are the
+// *kinds* of well-formed bullets -- its filter excludes an underscored bold token and the
+// canonical kinds are hyphenated. A wrong number under a heading that claims to say what
+// the reader missed is worse than an absent one, which is the whole point of this type.
+type Coverage struct {
+	// Skills is how many skills' documents were read.
+	Skills int `json:"skills"`
+
+	// EdgesRead is how many bullets the parser understood as edges.
+	EdgesRead int `json:"edges_read"`
+
+	// EdgesDangling is how many of those name a slug absent from this tree. They are read
+	// and still cover nothing, so they inflate EdgesRead without ever making a skill
+	// covered -- which is exactly the gap between "the graph looks populated" and "the
+	// orphan count means something". Targets naming another tree are excluded, since those
+	// are deliberate and resolvable only on disk.
+	EdgesDangling int `json:"edges_dangling"`
+}
+
+// Demotion is one skill's outbound edge losing rank between two trees -- rewritten to a
+// weaker kind, or dropped outright, which is Now == "".
+//
+// **A separate type from Change, because it answers a different question.** Change asks
+// "is this skill still covered"; a Demotion asks "did this relationship weaken". Folding
+// the second into the first would leave Orphaned and Weakened ambiguous about which they
+// mean, and the two diverge exactly where it matters: measured on the real corpus,
+// demoting go-beyond-packages-as-layers' composes-with edge produced **no** Change,
+// because two other skills still point at the target with depends-on and its strongest
+// inbound was unmoved. The corpus lost a use relationship and the tier could not see it.
+//
+// It also names *which file to open*, which a target-keyed Change cannot: the target
+// knows it was demoted, not by whom.
+type Demotion struct {
+	From string       `json:"from"`
+	To   string       `json:"to"`
+	Was  related.Kind `json:"was"`
+	Now  related.Kind `json:"now,omitempty"`
+}
+
 // Report is the comparison of two trees' inbound coverage.
 //
 // One list rather than four, with the direction derivable per Change. Partitioning here
@@ -50,6 +101,23 @@ type Report struct {
 	// Unadopted names the ranked kinds the current tree never writes, strongest first, so
 	// a reader knows the ladder had fewer rungs than it looks.
 	Unadopted []related.Kind `json:"unadopted,omitempty"`
+
+	// Demotions are the individual edges that weakened, sorted by source then target.
+	//
+	// **An edit can appear here and in Changes both**, when the demoted edge was also the
+	// target's strongest. That is not double-counting to be suppressed: the two say
+	// different things, and only this one names the skill whose bullet changed. Suppressing
+	// it would make Demotions mean "the demotions the tier missed" -- a type defined by
+	// what another type failed to catch, which is a worse thing to hand a reader than one
+	// edit described twice.
+	//
+	// Empty when there is no baseline, like Changes' regressions.
+	Demotions []Demotion `json:"demotions,omitempty"`
+
+	// Coverage describes the **current** tree alone. A baseline read out of a manifest has
+	// no documents to measure, and a figure spanning two differently-known sides would be
+	// a number about neither.
+	Coverage Coverage `json:"coverage"`
 }
 
 // Orphaned reports that the skill had inbound coverage and now has none.
@@ -179,6 +247,93 @@ func unadopted(nodes []related.Node) []related.Kind {
 	return out
 }
 
+// outbound maps each skill to the strongest kind it points at each target with.
+//
+// Strongest, because a skill may state one relationship twice: the reader dedupes on kind
+// and target, so two bullets naming the same pair with different kinds survive as two
+// edges, and comparing an arbitrary one of them against the baseline would report a
+// demotion whenever the pair happened to be visited in a different order.
+//
+// Requires: nodes are the skills of one tree.
+// Ensures:  pure. A self-edge is excluded, matching Inbound -- a document that stops
+// pointing at itself has not demoted a relationship anyone else relied on.
+func outbound(nodes []related.Node) map[Demotion]related.Kind {
+	out := make(map[Demotion]related.Kind, len(nodes))
+	for _, n := range nodes {
+		for _, e := range n.Edges {
+			if e.Target == n.Slug {
+				continue
+			}
+			pair := Demotion{From: n.Slug, To: e.Target}
+			if Rank(e.Kind) > Rank(out[pair]) {
+				out[pair] = e.Kind
+			}
+		}
+	}
+	return out
+}
+
+// demotions reports the edges that lost rank between two trees.
+//
+// Requires: base and cur are the skills of two versions of one tree.
+// Ensures:  pure. Sorted by source then target. Three rules, each of which a corpus
+// exercises:
+//   - Both endpoints must exist in **both** trees. A skill that arrived or was deleted
+//     takes its edges with it, and reporting those as demotions would bury the deletion
+//     under a list of relationships that went with it.
+//   - Only a strict rank decrease. A dropped edge falls out for free, since Rank("") is 0,
+//     and arrives with an empty Now.
+//   - A source a merge run superseded is suppressed, the same rule retired applies to
+//     targets and for the same reason: its edges decaying is the expected end of that life.
+func demotions(base, cur []related.Node) []Demotion {
+	was, now := outbound(base), outbound(cur)
+	inBoth := both(base, cur)
+	gone := retired(cur)
+	var out []Demotion
+	for pair, w := range was {
+		if !inBoth[pair.From] || !inBoth[pair.To] || gone[pair.From] {
+			continue
+		}
+		if n := now[pair]; Rank(n) < Rank(w) {
+			out = append(out, Demotion{From: pair.From, To: pair.To, Was: w, Now: n})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].From != out[j].From {
+			return out[i].From < out[j].From
+		}
+		return out[i].To < out[j].To
+	})
+	return out
+}
+
+// both returns the slugs present in each of two trees.
+func both(base, cur []related.Node) map[string]bool {
+	inBase := make(map[string]bool, len(base))
+	for _, n := range base {
+		inBase[n.Slug] = true
+	}
+	out := make(map[string]bool, len(cur))
+	for _, n := range cur {
+		if inBase[n.Slug] {
+			out[n.Slug] = true
+		}
+	}
+	return out
+}
+
+// measure counts how much of nodes the reader could see. See Coverage for what it
+// deliberately does not count, and why counting it would be worse than the gap.
+//
+// Ensures: pure. EdgesDangling <= EdgesRead, since a dangling edge is one that was read.
+func measure(nodes []related.Node) Coverage {
+	c := Coverage{Skills: len(nodes), EdgesDangling: len(related.DanglingEdges(nodes))}
+	for _, n := range nodes {
+		c.EdgesRead += len(n.Edges)
+	}
+	return c
+}
+
 // Compare reports how inbound coverage moved between a baseline tree and the current one.
 //
 // Two rules carry over unchanged from edit.Uncoupled, and re-deriving them is the whole
@@ -194,13 +349,24 @@ func unadopted(nodes []related.Node) []related.Kind {
 //
 // A skill that a merge run superseded is suppressed even when orphaned -- see retired.
 //
+// It reports two things, at two grains, and the second is not derivable from the first.
+// Changes is per target: did this skill's coverage move. Demotions is per edge: did this
+// relationship weaken. A demotion by one of several skills pointing at a target leaves the
+// target's strongest kind unmoved, so it produces a Demotion and no Change -- which is the
+// commonest way a corpus loses a relationship and the case a tier alone cannot see.
+//
 // Requires: base and cur are the skills of two versions of one tree.
 // Ensures:  pure. Changes holds only slugs present in both sides whose coverage differs,
 // sorted by slug. A skill absent from cur is gone rather than orphaned and is not reported.
 func Compare(base, cur []related.Node) Report {
 	was, now := Inbound(base), Inbound(cur)
 	gone := retired(cur)
-	rep := Report{BaseAvailable: true, Unadopted: unadopted(cur)}
+	rep := Report{
+		BaseAvailable: true,
+		Unadopted:     unadopted(cur),
+		Coverage:      measure(cur),
+		Demotions:     demotions(base, cur),
+	}
 	for slug, n := range now {
 		w, inBase := was[slug]
 		if !inBase || w == n || gone[slug] {
@@ -226,7 +392,7 @@ func Compare(base, cur []related.Node) Report {
 // denominator.
 func Survey(cur []related.Node) Report {
 	now := Inbound(cur)
-	rep := Report{Unadopted: unadopted(cur)}
+	rep := Report{Unadopted: unadopted(cur), Coverage: measure(cur)}
 	for slug, n := range now {
 		rep.Changes = append(rep.Changes, Change{Slug: slug, Now: n})
 	}

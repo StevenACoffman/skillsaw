@@ -116,14 +116,11 @@ Runtime neutrality is not checked here — "skillsaw scan" gates that separately
 }
 
 func (cfg *Config) exec(_ context.Context, args []string) error {
-	if bad := root.MisplacedFlag(args); bad != "" {
-		return fmt.Errorf(
-			"preflight: %q looks like a flag after arguments; put flags before positional arguments",
-			bad,
-		)
+	if err, bad := root.MisplacedFlag("preflight", args); bad {
+		return err
 	}
 	if len(args) == 0 {
-		return errors.New("preflight: pass at least one SKILL_DIR")
+		return root.Usagef("preflight: pass at least one SKILL_DIR")
 	}
 	if cfg.Against != "" && len(args) != 1 {
 		return errors.New(

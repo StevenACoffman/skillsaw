@@ -7,7 +7,6 @@ package diagnose
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 
@@ -66,14 +65,11 @@ scores from different rules are not a before and an after.`,
 }
 
 func (cfg *Config) exec(_ context.Context, args []string) error {
-	if bad := root.MisplacedFlag(args); bad != "" {
-		return fmt.Errorf(
-			"diagnose: %q looks like a flag after arguments; put flags before positional arguments",
-			bad,
-		)
+	if err, bad := root.MisplacedFlag("diagnose", args); bad {
+		return err
 	}
 	if len(args) == 0 {
-		return errors.New("diagnose: pass at least one SKILL_DIR")
+		return root.Usagef("diagnose: pass at least one SKILL_DIR")
 	}
 	previous, err := cfg.loadAgainst()
 	if err != nil {

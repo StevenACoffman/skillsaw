@@ -93,14 +93,11 @@ pass. Adding test-prompts, not editing the skill, is what resolves that.`,
 }
 
 func (cfg *Config) exec(_ context.Context, args []string) error {
-	if bad := root.MisplacedFlag(args); bad != "" {
-		return fmt.Errorf(
-			"activation: %q looks like a flag after arguments; put flags before positional arguments",
-			bad,
-		)
+	if err, bad := root.MisplacedFlag("activation", args); bad {
+		return err
 	}
 	if len(args) == 0 {
-		return errors.New("activation: need at least one skill directory")
+		return root.Usagef("activation: need at least one skill directory")
 	}
 	reports := make([]report, 0, len(args))
 	failed := false

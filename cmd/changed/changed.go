@@ -9,7 +9,6 @@ package changed
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 
@@ -81,17 +80,14 @@ This is a query, not a gate: it exits 0 whether or not anything is stale. Use
 }
 
 func (cfg *Config) exec(_ context.Context, args []string) error {
-	if bad := root.MisplacedFlag(args); bad != "" {
-		return fmt.Errorf(
-			"changed: %q looks like a flag after arguments; put flags before positional arguments",
-			bad,
-		)
+	if err, bad := root.MisplacedFlag("changed", args); bad {
+		return err
 	}
 	if len(args) > 0 {
-		return errors.New("changed: takes no positional arguments; pass --tree DIR")
+		return root.Usagef("changed: takes no positional arguments; pass --tree DIR")
 	}
 	if cfg.Manifest == "" {
-		return errors.New("changed: --manifest is required")
+		return root.Usagef("changed: --manifest is required")
 	}
 	base, err := loadManifest(cfg.Manifest)
 	if err != nil {

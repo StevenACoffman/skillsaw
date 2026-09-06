@@ -6,7 +6,6 @@ package checks
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -65,14 +64,11 @@ campaign the way "verified" gates structure.`,
 }
 
 func (cfg *Config) exec(_ context.Context, args []string) error {
-	if bad := root.MisplacedFlag(args); bad != "" {
-		return fmt.Errorf(
-			"checks: %q looks like a flag after arguments; put flags before positional arguments",
-			bad,
-		)
+	if err, bad := root.MisplacedFlag("checks", args); bad {
+		return err
 	}
 	if len(args) > 0 {
-		return errors.New("checks: takes no positional arguments; pass --tree DIR")
+		return root.Usagef("checks: takes no positional arguments; pass --tree DIR")
 	}
 	dirs, err := skill.Discover(cfg.Tree)
 	if err != nil {

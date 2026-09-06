@@ -89,14 +89,11 @@ dropped rather than clamped, and the count of dropped judgments is reported.`,
 }
 
 func (cfg *Config) exec(_ context.Context, args []string) error {
-	if bad := root.MisplacedFlag(args); bad != "" {
-		return fmt.Errorf(
-			"calibrate: %q looks like a flag after arguments; put flags before positional arguments",
-			bad,
-		)
+	if err, bad := root.MisplacedFlag("calibrate", args); bad {
+		return err
 	}
 	if len(args) != 1 {
-		return errors.New("calibrate: pass exactly one judgments JSON file")
+		return root.Usagef("calibrate: pass exactly one judgments JSON file")
 	}
 	judgments, err := load(args[0])
 	if err != nil {

@@ -5,7 +5,6 @@ package portable
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/fs"
 	"path/filepath"
@@ -75,14 +74,11 @@ fact about one machine, not about this tool.`,
 }
 
 func (cfg *Config) exec(_ context.Context, args []string) error {
-	if bad := root.MisplacedFlag(args); bad != "" {
-		return fmt.Errorf(
-			"portable: %q looks like a flag after arguments; put flags before positional arguments",
-			bad,
-		)
+	if err, bad := root.MisplacedFlag("portable", args); bad {
+		return err
 	}
 	if len(args) == 0 {
-		return errors.New("portable: pass at least one repository root; there are no defaults")
+		return root.Usagef("portable: pass at least one repository root; there are no defaults")
 	}
 	skills, err := cfg.gather(args)
 	if err != nil {

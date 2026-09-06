@@ -4,7 +4,7 @@ go 1.26.3
 
 require (
 	github.com/BurntSushi/toml v1.6.0
-	github.com/StevenACoffman/skillet v0.26.0
+	github.com/StevenACoffman/skillet v0.27.0
 	github.com/peterbourgon/ff/v4 v4.0.0-beta.1
 )
 

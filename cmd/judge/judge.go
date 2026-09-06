@@ -7,7 +7,6 @@ package judge
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -183,7 +182,7 @@ func (cfg *Config) resolveChecks() ([]judgelib.Check, error) {
 	case cfg.Checks != "":
 		return cfg.loadChecks()
 	default:
-		return nil, errors.New("judge: one of --checks or --from-test-prompts is required")
+		return nil, root.Usagef("judge: one of --checks or --from-test-prompts is required")
 	}
 }
 
@@ -254,11 +253,11 @@ func (cfg *Config) emit(res judgelib.Result) error {
 // scoreAll scores every behavioral case and reports the base their mean implies.
 func (cfg *Config) scoreAll() error {
 	if cfg.FromTestPrompts == "" {
-		return errors.New("judge: --all needs --from-test-prompts; there is no per-case " +
+		return root.Usagef("judge: --all needs --from-test-prompts; there is no per-case " +
 			"notion with a single --checks set")
 	}
 	if cfg.Outputs == "" {
-		return errors.New("judge: --all needs --outputs DIR holding out-<id>.txt per case")
+		return root.Usagef("judge: --all needs --outputs DIR holding out-<id>.txt per case")
 	}
 	f, err := testprompts.Load(cfg.FromTestPrompts)
 	if err != nil {

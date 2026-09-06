@@ -90,17 +90,14 @@ indistinguishable, in this file, from skills that got better.`,
 }
 
 func (cfg *Config) exec(_ context.Context, args []string) error {
-	if bad := root.MisplacedFlag(args); bad != "" {
-		return fmt.Errorf(
-			"log: %q looks like a flag after arguments; put flags before positional arguments",
-			bad,
-		)
+	if err, bad := root.MisplacedFlag("log", args); bad {
+		return err
 	}
 	if len(args) > 0 {
-		return errors.New("log: takes no positional arguments; every field is a flag")
+		return root.Usagef("log: takes no positional arguments; every field is a flag")
 	}
 	if strings.TrimSpace(cfg.Row.Skill) == "" {
-		return errors.New("log: --skill is required")
+		return root.Usagef("log: --skill is required")
 	}
 	if cfg.Row.Timestamp == "" {
 		cfg.Row.Timestamp = time.Now().Format(timeFormat)

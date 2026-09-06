@@ -7,7 +7,6 @@ package eval
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -93,11 +92,8 @@ its original meaning and applies to whatever it is given.`,
 }
 
 func (cfg *Config) exec(_ context.Context, args []string) error {
-	if bad := root.MisplacedFlag(args); bad != "" {
-		return fmt.Errorf(
-			"eval: %q looks like a flag after arguments; put flags before positional arguments",
-			bad,
-		)
+	if err, bad := root.MisplacedFlag("eval", args); bad {
+		return err
 	}
 	dirs := args
 	if cfg.All {
@@ -108,7 +104,7 @@ func (cfg *Config) exec(_ context.Context, args []string) error {
 		dirs = found
 	}
 	if len(dirs) == 0 {
-		return errors.New("eval: no skills found; pass SKILL_DIR arguments or use --all")
+		return root.Usagef("eval: no skills found; pass SKILL_DIR arguments or use --all")
 	}
 
 	judged, err := cfg.loadScores()

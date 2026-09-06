@@ -7,7 +7,6 @@ package scores
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -67,17 +66,14 @@ it wants.`,
 }
 
 func (cfg *Config) exec(_ context.Context, args []string) error {
-	if bad := root.MisplacedFlag(args); bad != "" {
-		return fmt.Errorf(
-			"scores: %q looks like a flag after arguments; put flags before positional arguments",
-			bad,
-		)
+	if err, bad := root.MisplacedFlag("scores", args); bad {
+		return err
 	}
 	if len(args) > 0 {
-		return errors.New("scores: takes no positional arguments; pass --skill DIR")
+		return root.Usagef("scores: takes no positional arguments; pass --skill DIR")
 	}
 	if cfg.Skill == "" {
-		return errors.New("scores: --skill is required")
+		return root.Usagef("scores: --skill is required")
 	}
 	bases, err := parseBases(cfg.Bases)
 	if err != nil {
@@ -115,23 +111,23 @@ func parseBases(spec string) (map[int]int, error) {
 		}
 		dim, base, ok := strings.Cut(pair, "=")
 		if !ok {
-			return nil, fmt.Errorf("scores: %q is not DIM=BASE", pair)
+			return nil, root.Usagef("scores: %q is not DIM=BASE", pair)
 		}
 		d, err := strconv.Atoi(strings.TrimSpace(dim))
 		if err != nil {
-			return nil, fmt.Errorf("scores: %q has a non-numeric dimension", pair)
+			return nil, root.Usagef("scores: %q has a non-numeric dimension", pair)
 		}
 		b, err := strconv.Atoi(strings.TrimSpace(base))
 		if err != nil {
-			return nil, fmt.Errorf("scores: %q has a non-numeric base", pair)
+			return nil, root.Usagef("scores: %q has a non-numeric base", pair)
 		}
 		if _, dup := out[d]; dup {
-			return nil, fmt.Errorf("scores: dimension %d given twice", d)
+			return nil, root.Usagef("scores: dimension %d given twice", d)
 		}
 		out[d] = b
 	}
 	if len(out) == 0 {
-		return nil, errors.New("scores: --bases is required, e.g. --bases 1=8,2=7")
+		return nil, root.Usagef("scores: --bases is required, e.g. --bases 1=8,2=7")
 	}
 	return out, nil
 }
