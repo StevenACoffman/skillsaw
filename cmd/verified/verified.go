@@ -11,6 +11,7 @@ import (
 
 	"github.com/StevenACoffman/skillet/manifest"
 	"github.com/StevenACoffman/skillsaw/cmd/root"
+	"github.com/StevenACoffman/skillsaw/internal/gate"
 )
 
 // Config holds the verified command configuration.
@@ -43,7 +44,16 @@ checks before starting a campaign.
 Pointing this at a JSON file that is not a manifest is an error, not a quiet
 "unverified": an unrelated document decodes into an empty manifest, whose
 structure_verified is false, and reporting that as a failed gate would send the reader
-looking for structural defects in a tree that was never examined.`,
+looking for structural defects in a tree that was never examined.
+
+A manifest covering no skills is refused for the same reason and reported differently.
+structure_verified is true on it -- vacuously, since no gate failed -- so gating on that
+alone let a campaign start against nothing. The refusal says the tree was not examined
+rather than found defective, because it has no defects; it has no skills.
+
+A manifest written before exegesis recorded an examined count is honoured on the verdict
+it does carry: it lists skills and cannot say how many were read, and refusing those
+would fail every manifest stored before the field existed.`,
 		Flags: cfg.Flags,
 		Exec:  cfg.exec,
 	}
@@ -64,8 +74,19 @@ func (cfg *Config) exec(_ context.Context, args []string) error {
 	}
 	// Name what was gated, not just the verdict: a bare pass or fail leaves the reader
 	// unable to tell whether the manifest they checked is the one they meant.
-	_, _ = fmt.Fprintf(cfg.Stdout, "%s: tool=%s tree=%s skills=%d structure_verified=%t\n",
-		args[0], m.Tool, m.Tree, len(m.Skills), m.StructureVerified)
+	_, _ = fmt.Fprintf(cfg.Stdout,
+		"%s: tool=%s tree=%s skills=%d examined=%s structure_verified=%t\n",
+		args[0], m.Tool, m.Tree, len(m.Skills), gate.Of(&m), m.StructureVerified)
+	// Coverage is asked before the verdict, because a manifest covering nothing has no
+	// meaningful verdict to report either way -- structure_verified is true on it, and
+	// saying so is the misdirection this command's help already warns about for the
+	// neighbouring case.
+	if gate.Of(&m) == gate.CoverageNone {
+		_, _ = fmt.Fprintf(cfg.Stderr,
+			"verified: %s covers no skills, so there is nothing to optimize; "+
+				"the tree was not examined rather than found defective\n", args[0])
+		return root.ExitError(1)
+	}
 	if !m.StructureVerified {
 		return root.ExitError(1)
 	}
