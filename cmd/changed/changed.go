@@ -97,7 +97,7 @@ func (cfg *Config) exec(_ context.Context, args []string) error {
 	if err != nil {
 		return fmt.Errorf("changed: %w", err)
 	}
-	delta := manifest.Diff(base, cur)
+	delta := manifest.Diff(&base, &cur)
 	return cfg.emit(&delta)
 }
 

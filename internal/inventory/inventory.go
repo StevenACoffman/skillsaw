@@ -110,7 +110,7 @@ func Tree(root string) (manifest.Manifest, error) {
 // recorded kind and target. Returns ErrEdgesUnrecorded when the producer did not read the
 // graph, because a manifest that recorded nothing and a tree that declares nothing are the
 // same bytes and must not be the same answer.
-func RecordedGraph(m manifest.Manifest) ([]related.Node, error) {
+func RecordedGraph(m *manifest.Manifest) ([]related.Node, error) {
 	if !m.EdgesRecorded {
 		return nil, fmt.Errorf("%s: %w", m.Tool, ErrEdgesUnrecorded)
 	}

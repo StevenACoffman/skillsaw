@@ -58,8 +58,8 @@ func TestUncoupledFindsOnlyTheStalePair(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			got := edit.Uncoupled(
-				manifest.Manifest{Tree: ".", Skills: []manifest.Skill{tc.base}},
-				manifest.Manifest{Tree: ".", Skills: []manifest.Skill{tc.cur}},
+				&manifest.Manifest{Tree: ".", Skills: []manifest.Skill{tc.base}},
+				&manifest.Manifest{Tree: ".", Skills: []manifest.Skill{tc.cur}},
 			)
 			if (len(got) > 0) != tc.want {
 				t.Errorf("got %d finding(s), want %v: %+v", len(got), tc.want, got)
@@ -74,8 +74,8 @@ func TestUncoupledFindsOnlyTheStalePair(t *testing.T) {
 func TestANewSkillHasNothingToBeUncoupledFrom(t *testing.T) {
 	t.Parallel()
 	got := edit.Uncoupled(
-		manifest.Manifest{Tree: "."},
-		manifest.Manifest{Tree: ".", Skills: []manifest.Skill{entry("h1", "p1")}},
+		&manifest.Manifest{Tree: "."},
+		&manifest.Manifest{Tree: ".", Skills: []manifest.Skill{entry("h1", "p1")}},
 	)
 	if len(got) != 0 {
 		t.Errorf("a skill absent from the baseline produced %+v", got)
@@ -88,8 +88,8 @@ func TestANewSkillHasNothingToBeUncoupledFrom(t *testing.T) {
 func TestTheFindingIsAdvisoryAndNeedsAPerson(t *testing.T) {
 	t.Parallel()
 	got := edit.Uncoupled(
-		manifest.Manifest{Tree: ".", Skills: []manifest.Skill{entry("h1", "p1")}},
-		manifest.Manifest{Tree: ".", Skills: []manifest.Skill{entry("h2", "p1")}},
+		&manifest.Manifest{Tree: ".", Skills: []manifest.Skill{entry("h1", "p1")}},
+		&manifest.Manifest{Tree: ".", Skills: []manifest.Skill{entry("h2", "p1")}},
 	)
 	if len(got) != 1 {
 		t.Fatalf("got %d findings, want 1", len(got))

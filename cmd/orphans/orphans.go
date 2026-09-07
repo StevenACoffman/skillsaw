@@ -194,7 +194,7 @@ func recordedBase(path string) ([]related.Node, error) {
 	if err != nil {
 		return nil, fmt.Errorf("orphans: %w", err)
 	}
-	nodes, err := inventory.RecordedGraph(m)
+	nodes, err := inventory.RecordedGraph(&m)
 	if errors.Is(err, inventory.ErrEdgesUnrecorded) {
 		return nil, fmt.Errorf(
 			"orphans: %s: %w; re-run the producer with a version that records them, "+
