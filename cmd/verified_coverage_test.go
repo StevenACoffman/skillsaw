@@ -16,7 +16,7 @@ func TestVerifiedRefusesAManifestCoveringNothing(t *testing.T) {
 	if err == nil {
 		t.Fatalf("a manifest covering no skills should not pass, got:\n%s", out)
 	}
-	if !strings.Contains(out, "examined=none") {
+	if !strings.Contains(out, "examined=0") {
 		t.Errorf("want the coverage reported, got:\n%s", out)
 	}
 }
@@ -68,7 +68,7 @@ func TestVerifiedStillFailsAnUnverifiedTreeWithACount(t *testing.T) {
 	if err == nil {
 		t.Fatalf("an unverified tree should still fail, got:\n%s", out)
 	}
-	if !strings.Contains(out, "examined=examined") {
+	if !strings.Contains(out, "examined=1") {
 		t.Errorf("want the count reported, got:\n%s", out)
 	}
 }
@@ -81,7 +81,11 @@ func TestVerifiedPassesAnExaminedVerifiedTree(t *testing.T) {
 	d.Examined = 2
 	path := writeManifest(t, d)
 
-	if out, err := run(t, "verified", path); err != nil {
+	out, err := run(t, "verified", path)
+	if err != nil {
 		t.Fatalf("a verified tree with a count was rejected: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "examined=2") {
+		t.Errorf("want the count itself reported, got:\n%s", out)
 	}
 }

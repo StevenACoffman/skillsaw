@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/peterbourgon/ff/v4"
 
@@ -74,14 +75,15 @@ func (cfg *Config) exec(_ context.Context, args []string) error {
 	}
 	// Name what was gated, not just the verdict: a bare pass or fail leaves the reader
 	// unable to tell whether the manifest they checked is the one they meant.
+	cov := gate.Of(&m)
 	_, _ = fmt.Fprintf(cfg.Stdout,
 		"%s: tool=%s tree=%s skills=%d examined=%s structure_verified=%t\n",
-		args[0], m.Tool, m.Tree, len(m.Skills), gate.Of(&m), m.StructureVerified)
+		args[0], m.Tool, m.Tree, len(m.Skills), examined(&m, cov), m.StructureVerified)
 	// Coverage is asked before the verdict, because a manifest covering nothing has no
 	// meaningful verdict to report either way -- structure_verified is true on it, and
 	// saying so is the misdirection this command's help already warns about for the
 	// neighbouring case.
-	if gate.Of(&m) == gate.CoverageNone {
+	if cov == gate.CoverageNone {
 		_, _ = fmt.Fprintf(cfg.Stderr,
 			"verified: %s covers no skills, so there is nothing to optimize; "+
 				"the tree was not examined rather than found defective\n", args[0])
@@ -91,6 +93,16 @@ func (cfg *Config) exec(_ context.Context, args []string) error {
 		return root.ExitError(1)
 	}
 	return nil
+}
+
+// examined renders the manifest's examined count for the report line. It prints the count
+// itself rather than the coverage name, since "examined=examined" restates the key; only a
+// manifest older than the field, which cannot say, prints "unknown".
+func examined(m *manifest.Manifest, cov gate.Coverage) string {
+	if cov == gate.CoverageUnknown {
+		return cov.String()
+	}
+	return strconv.Itoa(m.Examined)
 }
 
 // load reads and parses a manifest.
