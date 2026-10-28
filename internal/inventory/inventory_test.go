@@ -75,7 +75,7 @@ func TestRecordedGraphRoundTripsKindAndTargetAndDropsTheRationale(t *testing.T) 
 	if !m.EdgesRecorded {
 		t.Fatal("Tree walked the graph but did not say so; a consumer will read it as unavailable")
 	}
-	nodes, err := inventory.RecordedGraph(m)
+	nodes, err := inventory.RecordedGraph(&m)
 	if err != nil {
 		t.Fatalf("RecordedGraph: %v", err)
 	}
@@ -114,7 +114,7 @@ func TestRecordingEdgesDoesNotMoveTheDiff(t *testing.T) {
 		t.Fatal("the fixture recorded no edges, so this control proves nothing")
 	}
 
-	d := manifest.Diff(stripped, withEdges)
+	d := manifest.Diff(&stripped, &withEdges)
 	if len(d.Changed) != 0 || len(d.Added) != 0 || len(d.Removed) != 0 {
 		t.Errorf("recording edges moved the diff: %+v", d)
 	}
@@ -149,7 +149,7 @@ func TestRecordedGraphRefusesAManifestThatNeverReadTheGraph(t *testing.T) {
 	for name, m := range cases {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			nodes, err := inventory.RecordedGraph(m)
+			nodes, err := inventory.RecordedGraph(&m)
 			if !errors.Is(err, inventory.ErrEdgesUnrecorded) {
 				t.Fatalf("got (%v, %v), want ErrEdgesUnrecorded", nodes, err)
 			}
@@ -182,7 +182,7 @@ func TestRecordedGraphIsOrderedIndependentlyOfMapIteration(t *testing.T) {
 		{Kind: related.Informs, Target: "y"},
 	}
 	for range 20 {
-		nodes, err := inventory.RecordedGraph(m)
+		nodes, err := inventory.RecordedGraph(&m)
 		if err != nil {
 			t.Fatalf("RecordedGraph: %v", err)
 		}

@@ -28,6 +28,10 @@ type doc struct {
 	Tree              string  `json:"tree"`
 	StructureVerified bool    `json:"structure_verified"`
 	Skills            []entry `json:"skills"`
+	// Examined is omitempty here as it is on the real type, so a fixture that leaves it
+	// zero produces the bytes a pre-v0.30.0 exegesis wrote -- which is what makes the
+	// existing tests exercise the fall-back path rather than a synthetic one.
+	Examined int `json:"examined,omitempty"`
 }
 
 // makeTree writes one directory per named skill and returns the tree path.

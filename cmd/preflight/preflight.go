@@ -221,7 +221,7 @@ func (cfg *Config) couplingFindings(dirs []string) (map[string][]finding.Diagnos
 	cur := manifest.Manifest{Tree: base.Tree, Skills: skills}
 
 	out := make(map[string][]finding.Diagnostic)
-	for _, d := range edit.Uncoupled(base, cur) {
+	for _, d := range edit.Uncoupled(&base, &cur) {
 		if cfg.Coupling {
 			d.Severity = finding.SeverityError
 		}

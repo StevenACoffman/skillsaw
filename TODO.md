@@ -2866,8 +2866,50 @@ and a regression-relative gate would cost it that property permanently for one c
 
 Three findings from building `--base-manifest`, filed separately because each outlives it.
 
-- [ ] **exegesis must record edges, and the conversion should be promoted before it does.**
-  **The promotion is done (2026-08-27, skillet `6115cc3`, unreleased):** `related.EdgeMap`
+- [x] **exegesis must record edges, and the conversion should be promoted before it does.**
+  **SETTLED 2026-09-06. The two producers agree, demonstrated rather than asserted.**
+
+  All three parts are in: skillet released the pair at **v0.28.0**, skillsaw's half landed
+  2026-08-25, and exegesis records edges at `cmd/verify/verify.go:603` — `r.edges =
+  related.EdgeMap(related.ParseSection(s.Body))`, off the same `skill.Load` branch as the
+  hash so an unloadable skill leaves both empty under one rule — with `EdgesRecorded` set on
+  the built manifest at `:668`. On exegesis `main` via `06efe2c`.
+
+  **The check, on the tree this entry named.** `books/site-reliability-engineering`, 13
+  skills, all 13 carrying edges. A regenerated manifest reports `edges_recorded: true` and a
+  non-empty `edges` map per skill. One edge was then demoted on the source side —
+  `blameless-postmortem-process` → `hypothetico-deductive-troubleshooting-loop`, `depends-on`
+  to `informs`, both dialect spellings, since that skill states the edge twice — and the
+  expected finding was written down before the run.
+
+  **Both paths returned byte-identical JSON**, naming that demotion and nothing else, with
+  `coverage` agreeing at 13 skills and 50 edges read. `--strict` exits 1 on both and 0 on
+  both when nothing regressed. That is the condition this entry set: accepted, *and* the
+  same regression `--base-tree` reports for the same edit.
+
+  **Two controls, because an agreeing pair that agrees on nothing proves nothing.** An
+  unedited copy against the same baseline reports zero demotions on both paths, identically
+  — so the match above is discrimination and not a floor. And an old manifest is still
+  refused, naming its producer and both remedies, so acceptance did not come from the gate
+  going permissive.
+
+  **The trap worth recording: every manifest already on disk predates edge recording.** Both
+  `rednafi-go-advice` and `nfrs-skills` carry `[skills, structure_verified, tool, tree]` and
+  per-skill `[dir, sha256, slug, test_prompts]` — no `edges_recorded`, no `edges`. Running
+  the check against a file already in the corpus would still be refused, and that refusal
+  reads exactly like the feature failing rather than the fixture being stale. The manifest
+  has to be regenerated first.
+
+  **No test was added, deliberately.** A fixture capturing the regenerated manifest would
+  introduce a `testdata` convention this repo does not have — every test here builds its
+  tree with `t.TempDir()` — and it would pin the wrong half:
+  `TestRecordedGraphRoundTripsKindAndTargetAndDropsTheRationale` already drives
+  `inventory.Tree` → `RecordedGraph`, so the reader is covered against *skillsaw's own*
+  encoder. The open question was whether exegesis's encoder agrees, and nothing living in
+  this repo can answer it — which is what this entry meant by the check not being a unit
+  test. A guard for it belongs where both producers are visible.
+
+  Original entry: **The promotion is done (2026-08-27, skillet `6115cc3`, unreleased):** `related.EdgeMap`
   and `related.EdgesFrom` in `related/record.go`, sited there because `manifest` is
   stdlib-only and cannot import `related` — which is why the field is a
   `map[string][]string` in the first place. What remains is the two consumers, and **both
@@ -2974,3 +3016,60 @@ Three findings from building `--base-manifest`, filed separately because each ou
   tool is correct by its current definition and the corpus lost a use relationship. A target
   with a single inbound edge (`context-intent-action-for-ai-models`) is caught, which is
   what makes the boundary of the gap concrete rather than theoretical.
+
+## `verified` Passes a Manifest That Verified Nothing (2026-09-06)
+
+Source: exegesis found that `verify` writes `structure_verified=true` for a tree holding no
+skills. The producer half and the kernel half are filed in `exegesis/TODO.md` and
+`skillet/TODO.md`; this is the consumer end, where the false verdict is acted on.
+
+- [x] **`verified` gates on `structure_verified` alone, so a manifest covering zero skills
+  passes the gate that exists to stop a campaign starting on a bad tree.** DONE 2026-09-06
+  as `internal/gate.Of`, wired in ahead of the verdict.
+  **Three states, not two, and the middle one is the whole design.** `Examined` is
+  `omitempty`, so absent and zero are the same bytes; `len(Skills)` separates them.
+  `CoverageNone` (nothing examined) is refused; `CoverageUnknown` (skills listed, no count --
+  every manifest written before skillet v0.30.0) is **honoured on the verdict it does
+  carry**, because refusing those would fail the whole stored corpus on the day this shipped.
+  A gate that turns the corpus red teaches people to stop running it.
+  The absent/zero rule is skillet's, recorded on the field and pinned by a test there, so
+  this reads it rather than inventing a second rule that could disagree.
+  **Coverage is asked before the verdict**, because a manifest covering nothing has no
+  meaningful verdict to report either way — `structure_verified` is *true* on it.
+  **The refusal deliberately does not read as a structural failure**, which is the trap this
+  command's own help already names for the neighbouring case: reporting an unexamined tree as
+  a failed gate *"would send the reader looking for structural defects in a tree that was
+  never examined."* An empty tree is that sentence with the boolean the other way up. A test
+  asserts the property rather than the wording.
+  Verified end to end against a real `exegesis verify` manifest for an empty tree: written
+  `structure_verified: true, skills: []`, refused here with exit 1.
+  **`CoverageUnknown` is the zero value**, following `quotecheck.Status.Unchecked` — a
+  coverage nobody computed reads as "we do not know", never as "examined". Original entry:
+  `cmd/verified/verified.go:69` returns non-zero only when `!m.StructureVerified`. A tree
+  with no skills yields `structure_verified=true` and an empty `skills` array, so the gate
+  says go, and the expensive half of the loop starts against nothing.
+  **The command already reasons about this exact hazard, for the neighbouring case.** Its
+  LongHelp explains that an unrelated JSON file *"decodes into an empty manifest, whose
+  structure_verified is false"*, and that reporting it as a failed gate *"would send the
+  reader looking for structural defects in a tree that was never examined"* — so the
+  wrong-file path is handled deliberately. The genuine-manifest-of-an-empty-tree path is the
+  same sentence with the boolean the other way up, and it is unguarded.
+  **It also already has the datum.** Line 67 prints `skills=%d` from `len(m.Skills)`, so the
+  count a reader needs is on screen and not in the decision. The narrowest possible fix is
+  to gate on it, and that needs **no kernel change and no release** — worth knowing, because
+  it means this can be fixed here independently if the batch below slips.
+  **Decided 2026-09-06: take the explicit count from the manifest instead**, once
+  `skillet/manifest` carries one, so producer and consumer agree on what "examined" means
+  rather than the consumer inferring it from an array whose length is incidental.
+  **UNBLOCKED 2026-09-06 — both halves it was waiting on now exist.** `skillet v0.30.0`
+  carries `Manifest.Examined`, and `exegesis verify` sets it, so a manifest written today
+  states how many skills were examined. This command is the last place the false pass
+  survives: it still reads `StructureVerified` alone, so a manifest with `examined: 0` is
+  gated exactly like one covering a verified tree.
+  Note `Examined == 0` alone does not distinguish a pre-field manifest from a tree that
+  examined nothing; `len(Skills) > 0` beside it does, which is the inference skillet's field
+  doc records and pins.
+  **Do not report an empty tree as a structural failure.** That is the mistake the LongHelp
+  already names: the reader would go looking for defects in a tree that has none because it
+  has nothing. The message should say the manifest covers no skills and that a campaign has
+  nothing to optimize.

@@ -286,6 +286,12 @@ linters:
         # preserved) plus a message and trace frame — a genuine wrap, so wrapcheck
         # should treat it like the built-in .Wrap(/.WithMessage( it already allows.
         - .WrapWithMessage(
+        # root's exit-code values are terminal errors the dispatcher unpacks with
+        # errors.As; wrapping would bury the "<command>: <reason>" usage message
+        # and gain nothing, since the command is already the outermost frame.
+        - github.com/StevenACoffman/skillsaw/cmd/root.Usagef(
+        - github.com/StevenACoffman/skillsaw/cmd/root.MisplacedFlag(
+        - github.com/StevenACoffman/skillsaw/cmd/root.ExitError int
 
     # ── depguard ─────────────────────────────────────────────────────────────
     # spec.md: climax uses its own command pattern; no third-party CLI frameworks.

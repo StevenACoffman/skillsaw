@@ -27,7 +27,7 @@ const CategoryUncoupled = "uncoupled-test-prompts"
 // Requires: base and cur describe the same tree, cur built by inventory.
 // Ensures:  pure. One diagnostic per location whose skill hash moved and whose
 // test-prompts hash did not, in the order manifest.Delta reports them.
-func Uncoupled(base, cur manifest.Manifest) []finding.Diagnostic {
+func Uncoupled(base, cur *manifest.Manifest) []finding.Diagnostic {
 	// Axes cannot tell "has prompts, unchanged" from "has none on either side": both are
 	// TestPrompts=false, and only the first is a stale pair. The second is an untested
 	// skill, which is a real defect and a different one.
