@@ -190,7 +190,7 @@ func TestAgainstOriginal(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			got := edit.AgainstOriginal(orig, tc.edited, tc.growth)
+			got := edit.AgainstOriginal(orig, tc.edited, edit.Budget{MaxGrowth: tc.growth})
 			if tc.wantSub == "" {
 				if len(got) != 0 {
 					t.Errorf("an acceptable edit was rejected: %+v", got)
@@ -212,12 +212,42 @@ func TestAgainstOriginalReportsBothDefectsTogether(t *testing.T) {
 	// A no-op cannot also be oversized, so the two never co-occur for a real edit --
 	// but the function must not stop at the first, or a caller fixing one would then
 	// discover the other on the next round instead of both now.
-	got := edit.AgainstOriginal("abc", "abc", 1.5)
+	got := edit.AgainstOriginal("abc", "abc", edit.Budget{MaxGrowth: 1.5})
 	if len(got) != 1 {
 		t.Fatalf("want exactly the no-op defect, got %+v", got)
 	}
 	if edit.DefaultMaxGrowth != 1.5 {
 		t.Errorf("DefaultMaxGrowth = %v, want darwin's 1.5", edit.DefaultMaxGrowth)
+	}
+}
+
+func TestAgainstOriginalLineCeiling(t *testing.T) {
+	t.Parallel()
+	lines := func(n int) string { return strings.Repeat("x\n", n) }
+	// Byte growth is disabled so each case isolates the line rule.
+	budget := edit.Budget{MaxLines: 5}
+	cases := map[string]struct {
+		orig, edited string
+		refused      bool
+	}{
+		"under the ceiling":            {orig: lines(3), edited: lines(4)},
+		"exactly at the ceiling":       {orig: lines(3), edited: lines(5)},
+		"growing past the ceiling":     {orig: lines(4), edited: lines(6), refused: true},
+		"an oversized skill shrinking": {orig: lines(9), edited: lines(7)},
+		"an oversized skill reworded":  {orig: lines(9), edited: strings.Repeat("y\n", 9)},
+		"an oversized skill growing":   {orig: lines(9), edited: lines(10), refused: true},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			got := edit.AgainstOriginal(tc.orig, tc.edited, budget)
+			if refused := strings.Contains(messages(got), "line ceiling"); refused != tc.refused {
+				t.Errorf("line ceiling refused = %v, want %v (%+v)", refused, tc.refused, got)
+			}
+		})
+	}
+	if edit.DefaultMaxLines != 500 {
+		t.Errorf("DefaultMaxLines = %d, want the spec's 500", edit.DefaultMaxLines)
 	}
 }
 
