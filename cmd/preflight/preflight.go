@@ -32,6 +32,7 @@ type Config struct {
 	Manifest  string
 	Coupling  bool
 	MaxGrowth float64
+	MaxLines  int
 	Flags     *ff.FlagSet
 	Command   *ff.Command
 }
@@ -52,7 +53,9 @@ func (cfg *Config) registerFlags(parent *root.Config) {
 	cfg.Flags.StringVar(&cfg.Against, 0, "against", "",
 		"the pre-edit SKILL.md to judge the edit against (one SKILL_DIR only)")
 	cfg.Flags.Float64Var(&cfg.MaxGrowth, 0, "max-growth", edit.DefaultMaxGrowth,
-		"size ceiling with --against, as a multiple of the original")
+		"size ceiling with --against, as a multiple of the original (0 disables)")
+	cfg.Flags.IntVar(&cfg.MaxLines, 0, "max-lines", edit.DefaultMaxLines,
+		"with --against, refuse an edit that grows SKILL.md past this many lines (0 disables)")
 	cfg.Flags.StringVar(&cfg.Manifest, 0, "manifest", "",
 		"baseline skills-manifest.json; warns when a SKILL.md changed and its test-prompts did not")
 	cfg.Flags.BoolVar(&cfg.Coupling, 0, "require-coupling",
@@ -91,7 +94,9 @@ With --against, the edit is also judged against the text it replaced: an edit th
 left the content hash unchanged did nothing, and one that grew past --max-growth
 (default 1.5, darwin's ratio) has stopped being an edit and become a rewrite. Both
 were previously left to the caller as shell arithmetic that only printed a warning;
-here they fail the command like every other defect.
+here they fail the command like every other defect. An edit that grows SKILL.md past
+--max-lines (default 500, the agentskills.io recommendation) is refused too; one that
+does not add lines to an already-longer skill is not, so it can still be shrunk.
 
 --against takes exactly one SKILL_DIR. One original cannot describe several edits,
 and comparing every directory to one file would report defects that are arithmetic
@@ -160,8 +165,10 @@ func (cfg *Config) exec(_ context.Context, args []string) error {
 			continue
 		}
 		defects := edit.StructuralDefects(s, cfg.Redlines)
+		defects = append(defects, edit.StructuralAdvisories(s)...)
 		if cfg.Against != "" {
-			defects = append(defects, edit.AgainstOriginal(original, s.Raw, cfg.MaxGrowth)...)
+			defects = append(defects, edit.AgainstOriginal(original, s.Raw,
+				edit.Budget{MaxGrowth: cfg.MaxGrowth, MaxLines: cfg.MaxLines})...)
 		}
 		defects = append(defects, uncoupled[dir]...)
 		total += blocking(defects)
@@ -180,13 +187,13 @@ func (cfg *Config) exec(_ context.Context, args []string) error {
 // blocking counts the defects that decide the exit code.
 //
 // skillet's finding package is explicit that only SeverityError blocks, and this command
-// used to count every diagnostic instead. Nothing reachable from here emits a warning
-// today, so this moves no behaviour -- but it is what makes an advisory finding
-// expressible, and a gate that blocks on everything it is handed cannot be given one.
+// used to count every diagnostic instead. speclint's advisories (unknown keys, long
+// descriptions) are printed beside the defects, and this is what keeps them from
+// failing the gate.
 func blocking(defects []finding.Diagnostic) int {
 	n := 0
 	for i := range defects {
-		if defects[i].Severity == finding.SeverityError {
+		if defects[i].Severity.Blocking() {
 			n++
 		}
 	}

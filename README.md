@@ -32,6 +32,11 @@ Or build from a checkout:
 go build -o skillsaw .
 ```
 
+**Not on PyPI.** `uvx skillsaw` and `pip install skillsaw` install
+[stbenjam/skillsaw](https://github.com/stbenjam/skillsaw), an unrelated Python linter
+for agent instruction files that shares only the name. Check with `skillsaw --help`:
+this tool's commands include `eval`, `gate` and `preflight`.
+
 ---
 
 ## Quick start

@@ -73,7 +73,8 @@ func (cfg *Config) exec(_ context.Context, args []string) error {
 		if err != nil {
 			return fmt.Errorf("scan: %w", err)
 		}
-		dirs = found
+		root.ReportSkipped(cfg.Stderr, "scan", found.Skipped)
+		dirs = found.Dirs
 	}
 	if len(dirs) == 0 {
 		return root.Usagef("scan: no skills found; pass SKILL_DIR arguments or use --all")

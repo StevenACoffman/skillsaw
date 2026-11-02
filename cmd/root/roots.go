@@ -1,6 +1,12 @@
 package root
 
-import "strings"
+import (
+	"fmt"
+	"io"
+	"strings"
+
+	"github.com/StevenACoffman/skillet/fsutil"
+)
 
 // SplitRoots splits a comma-separated --roots flag value into trimmed, non-empty
 // directory names, for skill.DiscoverRoots. It is the CLI-side counterpart to
@@ -13,4 +19,13 @@ func SplitRoots(csv string) []string {
 		}
 	}
 	return roots
+}
+
+// ReportSkipped writes one line per discovery entry that could not be judged, prefixed
+// with the command name. A skipped entry is never dropped silently: a skill the walk
+// could not read is not a skill that passed.
+func ReportSkipped(w io.Writer, command string, skipped []fsutil.Skipped) {
+	for _, s := range skipped {
+		_, _ = fmt.Fprintf(w, "%s: skipped %s: %s\n", command, s.Path, s.Reason)
+	}
 }

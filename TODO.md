@@ -3073,3 +3073,34 @@ skills. The producer half and the kernel half are filed in `exegesis/TODO.md` an
   already names: the reader would go looking for defects in a tree that has none because it
   has nothing. The message should say the manifest covers no skills and that a campaign has
   nothing to optimize.
+
+## Consumer Half of the `stbenjam` and Agent Plugins Review (2026-11-02)
+
+Recommendations S1–S5 of `agent-orange/write/stbenjam_improvements.md`, and the skillet
+kernel changes they build on (skillet's TODO.md, same date).
+
+- [x] **Skillet migration.** `scan` and `eval --all` print every `skill.Discovery.Skipped`
+  entry to stderr through `root.ReportSkipped`; `checks` walks with `skill.DiscoverTree`
+  and reports its skips. `edit.StructuralDefects` returns blocking findings only, and
+  `edit.StructuralAdvisories` carries speclint's warnings (unknown keys, descriptions
+  over 300 runes), which `preflight` prints but does not count. Dim 1's kebab-case check
+  reads `speclint.ValidSkillName`; `TestKebabRuleMatchesSlugIdentity` pins that it agrees
+  with the old `Slug(name) == name` test for every non-empty name, so no score moved.
+- [x] **S5** `preflight --against` refuses an edit that grows `SKILL.md` past
+  `--max-lines` (default `edit.DefaultMaxLines`, 500, from agentskills.io). An edit that
+  adds no lines to an already-longer skill is admitted, so it can still shrink. `0`
+  disables the limit, as it now does for `--max-growth`.
+- [x] **S1** Dim 7 flags a `SKILL.md` over 500 lines that references no bundled file. A
+  flag only: no penalty, no edition change. `rubric.SpecMaxLines` duplicates
+  `edit.DefaultMaxLines` so the scorer does not import the gate; a test keeps them equal.
+- [x] **S2** Dim 8 flags `evals/evals.json` as present but not scored. Not converted: its
+  assertions are prose for a judge.
+- [x] **S3** The dim 3/5/9 note cites arXiv 2402.07896 and 2503.22395 for the existing
+  warning. No negation detector.
+- [x] **S4** README says this is not on PyPI and names the unrelated Python linter
+  `uvx skillsaw` installs. The skillsaw-skill F2 row is market work.
+- [ ] **S6** Pi session JSONL in `internal/transcript`: deferred by decision D13.
+- [ ] **Skillet follow-up.** The 500-line figure and the line count belong in skillet
+  (`speclint`), beside the other spec numbers, so exegesis's E5 gate and this one share
+  them. Dim 6's broken-link check could then move to `skill.BrokenLinks` (K5) — a scoring
+  question, since its reference rule differs, so filed rather than done.

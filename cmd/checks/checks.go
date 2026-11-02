@@ -70,12 +70,13 @@ func (cfg *Config) exec(_ context.Context, args []string) error {
 	if len(args) > 0 {
 		return root.Usagef("checks: takes no positional arguments; pass --tree DIR")
 	}
-	dirs, err := skill.Discover(cfg.Tree)
+	found, err := skill.DiscoverTree(cfg.Tree)
 	if err != nil {
 		return fmt.Errorf("checks: %w", err)
 	}
-	gaps := make([]gap, 0, len(dirs))
-	for _, dir := range dirs {
+	root.ReportSkipped(cfg.Stderr, "checks", found.Skipped)
+	gaps := make([]gap, 0, len(found.Dirs))
+	for _, dir := range found.Dirs {
 		gaps = append(gaps, scanSkill(dir))
 	}
 	return cfg.emit(gaps)

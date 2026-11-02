@@ -28,6 +28,20 @@ import (
 // an edit that comes in under it has not thereby been shown to be better.
 const DefaultMaxGrowth = 1.5
 
+// DefaultMaxLines is the line count an edit may not take a SKILL.md past:
+// speclint.SkillMaxLines, the agentskills.io recommendation (keep SKILL.md under 500 lines
+// and move detail into referenced files). That is what gives it authority here: rubric.toml
+// grants vendor prose none, and this is the spec, not vendor prose. Past it, Claude Code's
+// compaction keeps only a skill's first 5,000 tokens and a 32k local model spends a sixth
+// of its window on one skill.
+const DefaultMaxLines = speclint.SkillMaxLines
+
+// Budget is how far an edit may grow a skill. A zero field disables that limit.
+type Budget struct {
+	MaxGrowth float64 // ceiling as a multiple of the original's bytes
+	MaxLines  int     // line count the edit may not take SKILL.md past
+}
+
 // WithinSizeBudget reports whether an edited skill of newBytes stays within
 // ratio × origBytes (darwin's default ratio is 1.5). A non-positive origBytes
 // admits only an empty result, since any growth from nothing is unbounded.
@@ -46,7 +60,12 @@ func IsNoOp(before, after string) bool {
 }
 
 // AgainstOriginal returns the defects an edit introduces relative to the text it
-// replaced: one that changed nothing, and one that outgrew the budget.
+// replaced: one that changed nothing, one that outgrew the byte budget, and one that
+// took the file past the line ceiling.
+//
+// The line ceiling refuses only growth past it. An edit to a skill already over the
+// ceiling that does not add lines is admitted, so an oversized skill can still be
+// improved and shrunk rather than frozen.
 //
 // Both are ActionHuman: deciding what to write instead of nothing, or what to cut to get back
 // inside budget, is the judgement the edit step exists to make. Nothing here is
@@ -61,10 +80,10 @@ func IsNoOp(before, after string) bool {
 // to adopt an edit wants one answer, not two lists to merge. They are separate functions
 // only because StructuralDefects judges a skill on its own and this judges a change.
 //
-// Ensures: the result is empty iff the edit changed something and stayed within
+// Ensures: the result is empty iff the edit changed something, stayed within
 //
-//	maxGrowth; it is pure.
-func AgainstOriginal(orig, edited string, maxGrowth float64) []finding.Diagnostic {
+//	b.MaxGrowth, and did not grow past b.MaxLines; it is pure.
+func AgainstOriginal(orig, edited string, b Budget) []finding.Diagnostic {
 	var ds []finding.Diagnostic
 	if IsNoOp(orig, edited) {
 		ds = append(ds, finding.Diagnostic{
@@ -73,7 +92,7 @@ func AgainstOriginal(orig, edited string, maxGrowth float64) []finding.Diagnosti
 			Message:  "edit changed nothing: the content hash is unchanged",
 		})
 	}
-	if !WithinSizeBudget(len(orig), len(edited), maxGrowth) {
+	if b.MaxGrowth > 0 && !WithinSizeBudget(len(orig), len(edited), b.MaxGrowth) {
 		ds = append(ds, finding.Diagnostic{
 			Severity: finding.SeverityError,
 			Action:   finding.ActionHuman,
@@ -81,7 +100,23 @@ func AgainstOriginal(orig, edited string, maxGrowth float64) []finding.Diagnosti
 				"edit is %d bytes against the original's %d, past the %.2gx ceiling",
 				len(edited),
 				len(orig),
-				maxGrowth,
+				b.MaxGrowth,
+			),
+		})
+	}
+	if before, after := speclint.Lines(
+		orig,
+	), speclint.Lines(
+		edited,
+	); b.MaxLines > 0 && after > b.MaxLines &&
+		after > before {
+		ds = append(ds, finding.Diagnostic{
+			Severity: finding.SeverityError,
+			Action:   finding.ActionHuman,
+			Message: fmt.Sprintf(
+				"edit takes SKILL.md to %d lines (was %d), past the %d-line ceiling "+
+					"(agentskills.io: move detail into referenced files)",
+				after, before, b.MaxLines,
 			),
 		})
 	}
@@ -108,14 +143,44 @@ func AgainstOriginal(orig, edited string, maxGrowth float64) []finding.Diagnosti
 // prevent. Runtime neutrality is not included — `skillsaw scan` gates that
 // separately, and folding it in here would give one command two unrelated verdicts.
 //
-// Requires: s is a loaded skill.
-// Ensures:  the result is empty iff s carries no blocking structural defect under
+// speclint also returns advisory warnings (an unknown key, a description over the
+// family's length target). Those never block, so they are left out here and returned by
+// StructuralAdvisories for a caller that prints them.
 //
-//	the selected rules; it is pure.
+// Requires: s is a loaded skill.
+// Ensures:  every result is blocking, and the result is empty iff s carries no blocking
+//
+//	structural defect under the selected rules; it is pure.
 func StructuralDefects(s *skill.Skill, withRedlines bool) []finding.Diagnostic {
-	ds := speclint.Frontmatter(s)
+	ds := blockingOnly(speclint.Frontmatter(s))
 	if withRedlines {
-		ds = append(ds, redlines.Check(s)...)
+		ds = append(ds, blockingOnly(redlines.Check(s))...)
+	}
+	return ds
+}
+
+// StructuralAdvisories returns the spec findings for s that do not block: what a reader
+// should know about an edit's frontmatter but the gate must not reject it for.
+//
+// Requires: s is a loaded skill.
+// Ensures:  no result is blocking; it is pure.
+func StructuralAdvisories(s *skill.Skill) []finding.Diagnostic {
+	var ds []finding.Diagnostic
+	for _, d := range speclint.Frontmatter(s) {
+		if !d.Severity.Blocking() {
+			ds = append(ds, d)
+		}
+	}
+	return ds
+}
+
+// blockingOnly keeps the diagnostics whose severity blocks.
+func blockingOnly(all []finding.Diagnostic) []finding.Diagnostic {
+	var ds []finding.Diagnostic
+	for _, d := range all {
+		if d.Severity.Blocking() {
+			ds = append(ds, d)
+		}
 	}
 	return ds
 }
