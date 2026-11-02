@@ -28,7 +28,11 @@
 // can measurably worsen another: in a controlled comparison of guidance forms, a
 // prohibition-shaped arm produced clearly more of the unwanted content than a
 // recipe-shaped arm, with fully separated distributions, and trended worse than giving no
-// guidance at all. A skill whose baseline failure is wrong-shaped output or an omitted
+// guidance at all. Published work on negation supports the same warning (arXiv 2402.07896
+// and arXiv 2503.22395, cited by the stbenjam review in agent-orange's
+// write/stbenjam_improvements.md). It supports the warning only; it does not justify a
+// negation detector, and none is built. A skill whose baseline failure is wrong-shaped output or an
+// omitted
 // field wants a recipe, and scoring it against a boundary section rewards the wrong shape.
 //
 // The consequence for a reader of these scores: a low 3, 5 or 9 on a reference skill is a
