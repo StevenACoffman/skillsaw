@@ -108,14 +108,44 @@ func AgainstOriginal(orig, edited string, maxGrowth float64) []finding.Diagnosti
 // prevent. Runtime neutrality is not included — `skillsaw scan` gates that
 // separately, and folding it in here would give one command two unrelated verdicts.
 //
-// Requires: s is a loaded skill.
-// Ensures:  the result is empty iff s carries no blocking structural defect under
+// speclint also returns advisory warnings (an unknown key, a description over the
+// family's length target). Those never block, so they are left out here and returned by
+// StructuralAdvisories for a caller that prints them.
 //
-//	the selected rules; it is pure.
+// Requires: s is a loaded skill.
+// Ensures:  every result is blocking, and the result is empty iff s carries no blocking
+//
+//	structural defect under the selected rules; it is pure.
 func StructuralDefects(s *skill.Skill, withRedlines bool) []finding.Diagnostic {
-	ds := speclint.Frontmatter(s)
+	ds := blockingOnly(speclint.Frontmatter(s))
 	if withRedlines {
-		ds = append(ds, redlines.Check(s)...)
+		ds = append(ds, blockingOnly(redlines.Check(s))...)
+	}
+	return ds
+}
+
+// StructuralAdvisories returns the spec findings for s that do not block: what a reader
+// should know about an edit's frontmatter but the gate must not reject it for.
+//
+// Requires: s is a loaded skill.
+// Ensures:  no result is blocking; it is pure.
+func StructuralAdvisories(s *skill.Skill) []finding.Diagnostic {
+	var ds []finding.Diagnostic
+	for _, d := range speclint.Frontmatter(s) {
+		if !d.Severity.Blocking() {
+			ds = append(ds, d)
+		}
+	}
+	return ds
+}
+
+// blockingOnly keeps the diagnostics whose severity blocks.
+func blockingOnly(all []finding.Diagnostic) []finding.Diagnostic {
+	var ds []finding.Diagnostic
+	for _, d := range all {
+		if d.Severity.Blocking() {
+			ds = append(ds, d)
+		}
 	}
 	return ds
 }

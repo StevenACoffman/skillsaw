@@ -313,7 +313,9 @@ func checkFrontmatter(s *skill.Skill, cfg *Config, ds *DimScore) {
 	case strings.TrimSpace(s.Name) == "":
 		ds.Penalty += 3
 		ds.Flags = append(ds.Flags, "missing name")
-	case skill.Slug(s.Name) != s.Name:
+	// speclint holds the spec's whole name rule. For a non-empty name it accepts exactly
+	// what skill.Slug leaves unchanged, which this compared before, so no score moved.
+	case !speclint.ValidSkillName(s.Name):
 		ds.Penalty += 2
 		ds.Flags = append(ds.Flags, "name not kebab-case")
 	}

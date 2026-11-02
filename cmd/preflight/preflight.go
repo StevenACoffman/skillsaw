@@ -160,6 +160,7 @@ func (cfg *Config) exec(_ context.Context, args []string) error {
 			continue
 		}
 		defects := edit.StructuralDefects(s, cfg.Redlines)
+		defects = append(defects, edit.StructuralAdvisories(s)...)
 		if cfg.Against != "" {
 			defects = append(defects, edit.AgainstOriginal(original, s.Raw, cfg.MaxGrowth)...)
 		}
@@ -180,13 +181,13 @@ func (cfg *Config) exec(_ context.Context, args []string) error {
 // blocking counts the defects that decide the exit code.
 //
 // skillet's finding package is explicit that only SeverityError blocks, and this command
-// used to count every diagnostic instead. Nothing reachable from here emits a warning
-// today, so this moves no behaviour -- but it is what makes an advisory finding
-// expressible, and a gate that blocks on everything it is handed cannot be given one.
+// used to count every diagnostic instead. speclint's advisories (unknown keys, long
+// descriptions) are printed beside the defects, and this is what keeps them from
+// failing the gate.
 func blocking(defects []finding.Diagnostic) int {
 	n := 0
 	for i := range defects {
-		if defects[i].Severity == finding.SeverityError {
+		if defects[i].Severity.Blocking() {
 			n++
 		}
 	}

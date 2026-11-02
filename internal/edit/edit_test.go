@@ -229,3 +229,28 @@ func messages(ds []finding.Diagnostic) string {
 	}
 	return strings.Join(out, "\n")
 }
+
+// TestStructuralAdvisoriesDoNotBlock pins the split speclint's warnings forced: an unknown
+// key and a description over the family's length target are reported, never gated on.
+func TestStructuralAdvisoriesDoNotBlock(t *testing.T) {
+	t.Parallel()
+	s := &skill.Skill{
+		Name:            "demo-skill",
+		Description:     "Use when " + strings.Repeat("x", 400),
+		Body:            riaBody,
+		Frontmatter:     "name: demo-skill\nauthor: someone\n",
+		FrontmatterKeys: []string{"author", "description", "name"},
+	}
+	if got := edit.StructuralDefects(s, false); len(got) != 0 {
+		t.Errorf("advisories must not block adoption, got %+v", got)
+	}
+	got := edit.StructuralAdvisories(s)
+	if len(got) != 2 {
+		t.Fatalf("want the unknown-key and description-length advisories, got %+v", got)
+	}
+	for _, d := range got {
+		if d.Severity.Blocking() {
+			t.Errorf("advisory %q is blocking", d.Message)
+		}
+	}
+}
