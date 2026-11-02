@@ -55,6 +55,10 @@ import (
 	"github.com/StevenACoffman/skillet/testprompts"
 )
 
+// evalsFile is where skill-creator and the agentskills.io evaluation guide put a skill's
+// evaluations.
+const evalsFile = "evals/evals.json"
+
 // How a dimension's deterministic score responds to feeding it more of what it counts.
 const (
 	// ResponseUnclassified is the zero value and means nobody has established the
@@ -286,6 +290,7 @@ func applyChecks(num int, s *skill.Skill, doc *markdown.Doc, cfg *Config, ds *Di
 		deriveResources(s, doc, ds)
 	case 7:
 		checkSlop(doc, cfg, ds)
+		checkLength(s, doc, ds)
 	case 8:
 		checkScorable(s, ds)
 	case 9:
@@ -393,6 +398,7 @@ func checkFailure(doc *markdown.Doc, ds *DimScore) {
 // It asks testprompts.ChecksFor, which is the same call "judge --all" makes, so this
 // cannot report a case scorable that judge would then skip.
 func checkScorable(s *skill.Skill, ds *DimScore) {
+	reportEvalsFile(s, ds)
 	f, err := testprompts.Load(filepath.Join(s.Dir, "test-prompts.json"))
 	if err != nil {
 		ds.Flags = append(ds.Flags, "no readable test-prompts.json; dim 8 cannot be scored")
@@ -419,6 +425,20 @@ func checkScorable(s *skill.Skill, ds *DimScore) {
 	default:
 		ds.Flags = append(ds.Flags,
 			"all "+strconv.Itoa(len(behavioral))+" behavioral case(s) specify checks")
+	}
+}
+
+// reportEvalsFile flags an evals/evals.json skillsaw does not score, so its presence is
+// not read as "scored and fine". It is not converted to test prompts: its assertions are
+// prose that needs a judge, and a conversion would invent the deterministic checks dim 8
+// scores on. A flag only; no points move.
+func reportEvalsFile(s *skill.Skill, ds *DimScore) {
+	if info, err := os.Stat(
+		filepath.Join(s.Dir, filepath.FromSlash(evalsFile)),
+	); err == nil &&
+		!info.IsDir() {
+		ds.Flags = append(ds.Flags,
+			evalsFile+" present but not scored: skillsaw scores test-prompts.json checks only")
 	}
 }
 
@@ -567,6 +587,23 @@ func conventionalDir(seg string) bool {
 func isSubdir(dir, seg string) bool {
 	info, err := os.Stat(filepath.Join(dir, seg))
 	return err == nil && info.IsDir()
+}
+
+// checkLength flags a SKILL.md over speclint.SkillMaxLines that references no bundled file. It is a
+// flag and never a deduction: the rubric edition is unchanged, and results.tsv totals stay
+// comparable across runs. The spec gives it authority, which rubric.toml's rule denies to
+// vendor prose. An oversized skill that does point at reference files has already split,
+// so it is not flagged.
+func checkLength(s *skill.Skill, doc *markdown.Doc, ds *DimScore) {
+	lines := speclint.Lines(s.Raw)
+	if lines <= speclint.SkillMaxLines || len(resourceRefs(doc.Links, s.Dir)) > 0 {
+		return
+	}
+	ds.Flags = append(ds.Flags, fmt.Sprintf(
+		"SKILL.md exceeds the spec's %d-line recommendation (%d lines) and references no bundled files (agentskills.io)",
+		speclint.SkillMaxLines,
+		lines,
+	))
 }
 
 func checkSlop(doc *markdown.Doc, cfg *Config, ds *DimScore) {
